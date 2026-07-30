@@ -1,0 +1,111 @@
+openapi: 3.1.0
+info:
+  title: QTS Portal API
+  version: 1.0.0
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+  description: >-
+    Hợp đồng API nền tảng của QTS Portal. Bản hiện tại chỉ công khai các endpoint
+    hạ tầng; các API nghiệp vụ sẽ được bổ sung sau khi IAM và mô hình dữ liệu được
+    phê duyệt.
+servers:
+  - url: http://127.0.0.1:8080
+    description: Môi trường phát triển local
+paths:
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      summary: Kiểm tra tiến trình API đang hoạt động
+      tags: [Infrastructure]
+      security: []
+      responses:
+        "200":
+          description: Tiến trình API đang hoạt động
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/ready:
+    get:
+      operationId: getReadiness
+      summary: Kiểm tra API sẵn sàng nhận lưu lượng
+      tags: [Infrastructure]
+      security: []
+      responses:
+        "200":
+          description: API sẵn sàng nhận lưu lượng
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+        "503":
+          description: API hoặc dependency chưa sẵn sàng
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+components:
+  responses:
+    MethodNotAllowed:
+      description: Phương thức HTTP không được hỗ trợ
+      headers:
+        Allow:
+          schema:
+            type: string
+          description: Danh sách phương thức được hỗ trợ
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [service, status, version]
+          properties:
+            service:
+              type: string
+              const: qts-portal-api
+            status:
+              type: string
+              const: ok
+            version:
+              type: string
+              examples: [1.0.0]
+    ReadyResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status:
+              type: string
+              const: ready
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string

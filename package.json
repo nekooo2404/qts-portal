@@ -1,0 +1,32 @@
+{
+  "name": "qts-portal",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "npm@11.13.0",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev:frontend",
+    "dev:frontend": "npm run dev --workspace @qts/frontend --",
+    "dev:backend": "npm run dev --workspace @qts/backend",
+    "start:backend": "npm run start --workspace @qts/backend",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "npm run build --workspace @qts/frontend",
+    "build:backend": "npm run build --workspace @qts/backend",
+    "typecheck": "npm run typecheck --workspace @qts/frontend",
+    "lint": "npm run lint:frontend && npm run lint:backend",
+    "lint:frontend": "npm run lint --workspace @qts/frontend",
+    "lint:backend": "npm run lint --workspace @qts/backend",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "npm run test --workspace @qts/frontend --",
+    "test:backend": "npm run test --workspace @qts/backend",
+    "test:watch": "npm run test:watch --workspace @qts/frontend",
+    "preview": "npm run preview --workspace @qts/frontend --",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build"
+  }
+}

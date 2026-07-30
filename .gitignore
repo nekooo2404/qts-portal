@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+output/
+.hallmark/
+.playwright-cli/
+*.tsbuildinfo
+*.log
