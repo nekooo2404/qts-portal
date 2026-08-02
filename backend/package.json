@@ -15,7 +15,8 @@
     "db:migrate:env": "node --env-file=.env scripts/database.js migrate",
     "db:rollback": "node scripts/database.js rollback",
     "db:rollback:env": "node --env-file=.env scripts/database.js rollback",
-    "test": "node --test",
+    "test": "node --test test/*.test.js",
+    "test:integration:env": "node --env-file=.env --test integration/*.test.js",
     "lint": "node scripts/check-js.js",
     "build": "npm run lint"
   },

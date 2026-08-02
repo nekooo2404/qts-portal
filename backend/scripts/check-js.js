@@ -14,7 +14,7 @@ async function findJavaScriptFiles(directory) {
 }
 
 const files = (
-  await Promise.all(["src", "test", "scripts"].map(findJavaScriptFiles))
+  await Promise.all(["src", "test", "integration", "scripts"].map(findJavaScriptFiles))
 ).flat().sort();
 
 for (const file of files) {

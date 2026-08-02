@@ -42,7 +42,6 @@ const ROLE_PERMISSIONS = Object.freeze({
   technical: new Set([
     ...READ_ONLY_CLIENT,
     "tickets.create",
-    "tickets.manage",
     "integrations.read",
   ]),
   billing: new Set([
@@ -56,7 +55,6 @@ const ROLE_PERMISSIONS = Object.freeze({
   client_admin: new Set([
     ...READ_ONLY_CLIENT,
     "tickets.create",
-    "tickets.manage",
     "integrations.read",
     "members.read",
     "members.write",
