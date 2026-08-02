@@ -12,7 +12,7 @@
     "start": "node src/server.js",
     "start:env": "node --env-file=.env src/server.js",
     "test": "node --test",
-    "lint": "node --check src/app.js && node --check src/auth-config.js && node --check src/auth-service.js && node --check src/auth-store.js && node --check src/google-oidc.js && node --check src/server.js && node --check test/app.test.js && node --check test/auth-config.test.js && node --check test/auth-http.test.js && node --check test/auth-service.test.js && node --check test/google-oidc.test.js",
+    "lint": "node scripts/check-js.js",
     "build": "npm run lint"
   },
   "dependencies": {
