@@ -1,10 +1,17 @@
 import { createServer } from "node:http";
 
 import { createRequestHandler } from "./app.js";
+import { readAuthConfig } from "./auth-config.js";
+import { createAuthService } from "./auth-service.js";
+import { createGoogleOidcClient } from "./google-oidc.js";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8080;
 const SHUTDOWN_TIMEOUT_MS = 10_000;
+
+function writeAuditEvent(event) {
+  process.stdout.write(`${JSON.stringify(event)}\n`);
+}
 
 function parsePort(value) {
   if (value === undefined || value === "") {
@@ -19,15 +26,40 @@ function parsePort(value) {
   return port;
 }
 
+function parseTrustedProxyHops(value) {
+  if (value === undefined || value === "") return 0;
+  const hops = Number(value);
+  if (!Number.isInteger(hops) || hops < 0 || hops > 10) {
+    throw new Error("QTS_TRUST_PROXY_HOPS must be an integer between 0 and 10.");
+  }
+  return hops;
+}
+
 export function readServerConfig(environment = process.env) {
   return {
     host: environment.QTS_API_HOST?.trim() || DEFAULT_HOST,
     port: parsePort(environment.QTS_API_PORT),
+    trustedProxyHops: parseTrustedProxyHops(environment.QTS_TRUST_PROXY_HOPS),
   };
 }
 
-export function createApiServer() {
-  const server = createServer(createRequestHandler());
+export function createApiServer({ environment = process.env } = {}) {
+  const serverConfig = readServerConfig(environment);
+  const authConfig = readAuthConfig(environment);
+  const oidcClient = authConfig.enabled
+    ? createGoogleOidcClient(authConfig)
+    : undefined;
+  const authService = createAuthService({
+    config: authConfig,
+    oidcClient,
+    audit: writeAuditEvent,
+  });
+  const server = createServer(
+    createRequestHandler({
+      authService,
+      trustedProxyHops: serverConfig.trustedProxyHops,
+    }),
+  );
   server.headersTimeout = 10_000;
   server.requestTimeout = 15_000;
   server.keepAliveTimeout = 5_000;

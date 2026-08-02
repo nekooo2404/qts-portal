@@ -113,9 +113,9 @@ export function ContactPanel() {
               <option value="assessment">Đánh giá bề mặt tấn công</option>
               <option value="pentest">Kiểm thử xâm nhập</option>
               <option value="vulnerability">Quản trị lỗ hổng</option>
-              <option value="identity-cloud">Cloud & danh tính</option>
+              <option value="identity-cloud">Cloud &amp; danh tính</option>
               <option value="incident-response">Ứng phó sự cố</option>
-              <option value="architecture">Kiến trúc & tuân thủ</option>
+              <option value="architecture">Kiến trúc &amp; tuân thủ</option>
             </select>
             <p id="contact-service-help" className="field__help">
               {errors.service ?? 'Chọn điểm gần nhất; phạm vi có thể được điều chỉnh.'}

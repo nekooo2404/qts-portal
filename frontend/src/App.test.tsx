@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App';
 
@@ -8,6 +8,54 @@ function renderAt(path: string) {
   window.history.replaceState({}, '', path);
   return render(<App />);
 }
+
+function mockAuth({
+  configured,
+  session,
+}: {
+  configured: boolean;
+  session?: {
+    user: { email: string; displayName: string };
+    authorization: {
+      tenantId: string;
+      role: string;
+      workspace: 'client' | 'internal';
+    };
+    csrfToken: string;
+    expiresAt: string;
+  };
+}) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url === '/api/v1/auth/status') {
+      return new Response(
+        JSON.stringify({ data: { configured, provider: 'google' } }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    if (url === '/api/v1/auth/session') {
+      return session
+        ? new Response(JSON.stringify({ data: session }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        : new Response(
+            JSON.stringify({ error: { code: 'SESSION_REQUIRED', message: 'Cần đăng nhập.' } }),
+            { status: 401, headers: { 'Content-Type': 'application/json' } },
+          );
+    }
+    if (url === '/api/v1/auth/logout' && init?.method === 'POST') {
+      return new Response(null, { status: 204 });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('QTS portal', () => {
   it('presents the QTS brand and primary security path', () => {
@@ -110,11 +158,12 @@ describe('QTS portal', () => {
     );
   });
 
-  it('does not expose a local sign-in flow while IAM is not configured', () => {
+  it('does not expose a local sign-in flow while IAM is not configured', async () => {
+    mockAuth({ configured: false });
     renderAt('/');
 
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Đăng nhập chưa khả dụng' }),
+      await screen.findByRole('heading', { level: 1, name: 'Đăng nhập chưa khả dụng' }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/không chứa tài khoản hoặc phiên đăng nhập cục bộ/i),
@@ -124,25 +173,120 @@ describe('QTS portal', () => {
     expect(screen.getByRole('button', { name: 'Đăng nhập chưa khả dụng' })).toBeDisabled();
   });
 
-  it('keeps the client route data-free until IAM and APIs are integrated', () => {
+  it('offers Google login only after backend reports OIDC configured', async () => {
+    mockAuth({ configured: true });
+    renderAt('/');
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Đăng nhập vào QTS Portal' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Đăng nhập với Google' })).toHaveAttribute(
+      'href',
+      '/api/v1/auth/login/google?returnTo=%2F',
+    );
+    expect(screen.queryByLabelText(/mật khẩu/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/mã xác thực/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps the client route data-free until Google OIDC is configured', async () => {
+    mockAuth({ configured: false });
     renderAt('/client/overview');
 
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Client Portal chưa khả dụng' }),
+      await screen.findByRole('heading', { level: 1, name: 'Client Portal chưa khả dụng' }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/IAM và API nghiệp vụ chưa được tích hợp/i)).toBeInTheDocument();
+    expect(screen.getByText(/Google OIDC chưa được cấu hình/i)).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/client/overview');
   });
 
-  it('keeps the internal route data-free until IAM and APIs are integrated', () => {
+  it('keeps the internal route data-free until Google OIDC is configured', async () => {
+    mockAuth({ configured: false });
     renderAt('/admin/soc');
 
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Internal Portal chưa khả dụng' }),
+      await screen.findByRole('heading', { level: 1, name: 'Internal Portal chưa khả dụng' }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/không có dữ liệu SOC cục bộ/i)).toBeInTheDocument();
+    expect(screen.getByText(/Google OIDC chưa được cấu hình/i)).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/admin/soc');
+  });
+
+  it('opens only the workspace granted by the backend session', async () => {
+    mockAuth({
+      configured: true,
+      session: {
+        user: { email: 'client@example.vn', displayName: 'Client Admin' },
+        authorization: {
+          tenantId: 'tenant-001',
+          role: 'client_admin',
+          workspace: 'client',
+        },
+        csrfToken: 'csrf-001',
+        expiresAt: '2026-08-03T16:00:00.000Z',
+      },
+    });
+    renderAt('/client/overview');
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Client Portal đã xác thực' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('client_admin')).toBeInTheDocument();
+    expect(screen.getByText('tenant-001')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('denies a client session from entering the internal workspace', async () => {
+    mockAuth({
+      configured: true,
+      session: {
+        user: { email: 'client@example.vn', displayName: 'Client Admin' },
+        authorization: {
+          tenantId: 'tenant-001',
+          role: 'client_admin',
+          workspace: 'client',
+        },
+        csrfToken: 'csrf-001',
+        expiresAt: '2026-08-03T16:00:00.000Z',
+      },
+    });
+    renderAt('/admin/soc');
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Không có quyền truy cập' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/workspace do backend cấp/i)).toBeInTheDocument();
+  });
+
+  it('sends the server-issued CSRF token when logging out', async () => {
+    const fetchMock = mockAuth({
+      configured: true,
+      session: {
+        user: { email: 'security@qts.com.vn', displayName: 'QTS Security' },
+        authorization: {
+          tenantId: 'qts-vietnam',
+          role: 'qts_admin',
+          workspace: 'internal',
+        },
+        csrfToken: 'csrf-001',
+        expiresAt: '2026-08-03T16:00:00.000Z',
+      },
+    });
+    const user = userEvent.setup();
+    renderAt('/admin/soc');
+
+    await user.click(await screen.findByRole('button', { name: 'Đăng xuất' }));
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/auth/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-Token': 'csrf-001',
+      },
+    });
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Cần đăng nhập' }),
+    ).toBeInTheDocument();
   });
 });

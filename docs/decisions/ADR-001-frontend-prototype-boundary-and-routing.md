@@ -2,7 +2,7 @@
 
 ## Trạng thái
 
-Superseded in part by ADR-003
+Superseded in part by ADR-003 and ADR-004
 
 ## Ngày
 
@@ -10,7 +10,7 @@ Superseded in part by ADR-003
 
 ## Ghi chú thay thế
 
-ADR-003 thay thế các quyết định về session, dữ liệu nghiệp vụ, phân quyền cục bộ và nhãn dữ liệu trong các mục 4, 5 và 7. Quyết định dùng History API và SPA fallback vẫn còn hiệu lực.
+ADR-003 thay thế các quyết định về dữ liệu nghiệp vụ và phân quyền cục bộ. ADR-004 thay thế quyết định session trong React memory bằng Google OIDC và session cookie phía backend. Quyết định dùng History API và SPA fallback vẫn còn hiệu lực.
 
 ## Bối cảnh
 

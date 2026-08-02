@@ -2,7 +2,9 @@
 
 ## Trạng thái
 
-Accepted
+Superseded in part by ADR-004
+
+Các quyết định về npm workspaces, ranh giới frontend/backend và same-origin proxy vẫn còn hiệu lực. ADR-004 thay thế trạng thái backend không có runtime dependency và quyết định trì hoãn IAM bằng Google OIDC cùng session phía backend.
 
 ## Ngày
 

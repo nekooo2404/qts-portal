@@ -1,88 +1,140 @@
 # QTS Portal Backend
 
-Backend HTTP chạy độc lập cho QTS Operations Portal. Phiên bản hiện tại là nền tảng hạ tầng có health/readiness, response JSON nhất quán, timeout và graceful shutdown.
+Backend Node.js chịu trách nhiệm toàn bộ Google OpenID Connect, ánh xạ tenant/role, session cookie, CSRF và API hạ tầng. Frontend không sở hữu credential hoặc token Google.
 
-> Backend chưa có IAM, MFA/SSO, RBAC server-side, tenant storage, ticket, billing, telemetry, audit hoặc tích hợp SIEM/SOAR/EDR. Không triển khai production dựa trên hai endpoint hạ tầng này như thể hệ thống nghiệp vụ đã hoàn chỉnh.
+## Phạm vi
+
+- Health và readiness.
+- Google Authorization Code Flow với `openid email profile`.
+- `state`, `nonce` và PKCE S256 mới cho từng lần đăng nhập.
+- Callback `/api/v1/auth/callback/google`.
+- Xác minh ID token bằng `openid-client` và JWKS của Google.
+- Kiểm tra lại `iss`, `aud`, `exp`, `nonce`, `email_verified`, `hd`.
+- Membership allowlist dùng cặp `issuer + subject`.
+- Opaque session ID trong cookie HttpOnly.
+- CSRF token cho logout.
+- Auth audit event dạng JSON trên stdout.
+
+Backend chưa có API SOC/ticket/asset/billing, database, shared session store hoặc audit store bền vững.
+
+## Cấu trúc
+
+```text
+backend/
+|-- .env.example
+|-- src/
+|   |-- app.js           # HTTP routing, cookie parsing, error response, rate limit
+|   |-- auth-config.js   # Env validation, role/workspace và membership
+|   |-- auth-service.js  # Transaction, claims, session và CSRF
+|   |-- auth-store.js    # Store TTL trong RAM
+|   |-- google-oidc.js   # Adapter openid-client
+|   `-- server.js        # Process lifecycle và wiring
+`-- test/                # Config, HTTP, service, OIDC adapter và probe tests
+```
 
 ## Chạy backend
 
-Từ thư mục gốc:
+Không đọc file `.env`:
 
 ```powershell
-cd D:\hoapuiii\Code\qts-portal
-npm ci
 npm run dev:backend
+```
+
+Đọc `backend/.env`:
+
+```powershell
+npm run dev:backend:env
 ```
 
 Chế độ không watch:
 
 ```powershell
 npm run start:backend
+npm run start:backend:env
 ```
 
-Backend mặc định lắng nghe tại `http://127.0.0.1:8080`.
+Mặc định backend lắng nghe tại `http://127.0.0.1:8080`.
 
-## Cấu hình
+## Biến môi trường
 
-| Biến | Mặc định | Quy tắc |
+| Biến | Mặc định | Validation |
 | --- | --- | --- |
-| `QTS_API_HOST` | `127.0.0.1` | Địa chỉ lắng nghe; chỉ mở ra mạng khi có kiểm soát firewall/reverse proxy |
-| `QTS_API_PORT` | `8080` | Số nguyên từ `1` đến `65535` |
+| `QTS_API_HOST` | `127.0.0.1` | Host backend |
+| `QTS_API_PORT` | `8080` | Số nguyên `1..65535` |
+| `QTS_TRUST_PROXY_HOPS` | `0` | `0..10`; số reverse proxy tin cậy trước backend |
+| `QTS_PUBLIC_ORIGIN` | `http://127.0.0.1:5173` | Origin tuyệt đối, không path/query/hash; HTTPS ở production |
+| `QTS_AUTH_COOKIE_SECURE` | Theo protocol origin | Production bắt buộc `true` |
+| `GOOGLE_CLIENT_ID` | Không có | Bắt buộc khi bật auth |
+| `GOOGLE_CLIENT_SECRET` | Không có | Bắt buộc; chỉ backend được đọc |
+| `GOOGLE_OIDC_ISSUER` | `https://accounts.google.com` | Không cho đổi sang issuer khác |
+| `GOOGLE_WORKSPACE_DOMAIN` | Không giới hạn | Nếu có, claim `hd` phải khớp |
+| `QTS_AUTH_MEMBERSHIPS_JSON` | Không có | Mảng JSON, có thể là `[]` để bootstrap fail-closed |
+| `QTS_AUTH_TRANSACTION_TTL_SECONDS` | `600` | `120..900` |
+| `QTS_SESSION_TTL_SECONDS` | `28800` | `900..86400` |
 
-Ví dụ:
+Nếu không có bất kỳ cấu hình Google nào, auth ở trạng thái disabled. Nếu chỉ có một phần cấu hình, process từ chối khởi động.
 
-```powershell
-$env:QTS_API_HOST = "127.0.0.1"
-$env:QTS_API_PORT = "8081"
-npm run start:backend
+Membership schema:
+
+```json
+[
+  {
+    "issuer": "https://accounts.google.com",
+    "subject": "google-sub-da-xac-minh",
+    "tenantId": "tenant-do-qts-quan-ly",
+    "role": "soc_l1"
+  }
+]
 ```
 
-Ứng dụng không tự đọc file `.env`. Nền tảng triển khai phải cấp biến môi trường qua process manager, container hoặc secret manager phù hợp.
+Không thêm `email` vào membership. Parser từ chối field ngoài `issuer`, `subject`, `tenantId`, `role` để tránh vô tình dùng email làm ID.
 
 ## Endpoint
 
-| Method | Path | Quyền | Mục đích | Thành công |
-| --- | --- | --- | --- | --- |
-| `GET` | `/api/v1/health` | Công khai | Liveness: tiến trình HTTP đang hoạt động | `200` |
-| `GET` | `/api/v1/ready` | Công khai | Readiness: tiến trình sẵn sàng nhận lưu lượng | `200` |
+| Method | Path | Thành công | Lỗi chính |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/health` | `200` | `405` |
+| `GET` | `/api/v1/ready` | `200` | `503`, `405` |
+| `GET` | `/api/v1/auth/status` | `200` | `405` |
+| `GET` | `/api/v1/auth/login/google` | `302` | `400`, `429`, `503` |
+| `GET` | `/api/v1/auth/callback/google` | `303` | `400`, `401`, `403`, `503` |
+| `GET` | `/api/v1/auth/session` | `200` | `401` |
+| `POST` | `/api/v1/auth/logout` | `204` | `401`, `403` |
 
-Health response:
-
-```json
-{
-  "data": {
-    "service": "qts-portal-api",
-    "status": "ok",
-    "version": "1.0.0"
-  }
-}
-```
-
-Lỗi có một envelope thống nhất:
+Error envelope:
 
 ```json
 {
   "error": {
-    "code": "NOT_FOUND",
-    "message": "Không tìm thấy tài nguyên."
+    "code": "MEMBERSHIP_NOT_FOUND",
+    "message": "Tài khoản chưa được cấp tenant và role trên QTS Portal."
   }
 }
 ```
 
-Hợp đồng đầy đủ nằm tại [openapi.yaml](../docs/api/openapi.yaml).
+Contract đầy đủ: [OpenAPI](../docs/api/openapi.yaml).
 
-Hai probe công khai chỉ trả trạng thái tối thiểu và không được tiết lộ cấu hình, dependency, stack trace hoặc dữ liệu khách hàng. API nghiệp vụ tương lai không được kế thừa `security: []`; mỗi operation phải khai báo cơ chế xác thực và quyền tương ứng.
+## Cookie
 
-## Hardening hiện có
+Production session cookie:
 
-- Không bật CORS; mô hình mặc định là cùng origin qua reverse proxy.
-- Mọi response có `Cache-Control: no-store`, `nosniff`, frame deny, CSP chặn nội dung và referrer policy.
-- Giới hạn tối đa `100` header; header timeout `10s`, request timeout `15s`, keep-alive timeout `5s`.
-- Client protocol error bị đóng socket, không phản chiếu nội dung lỗi nội bộ.
-- `SIGINT` và `SIGTERM` kích hoạt graceful shutdown, có giới hạn chờ `10s`.
-- Log lifecycle ở dạng JSON và không ghi request body, header xác thực hoặc secret.
+- Tên `__Host-qts_session`.
+- `Path=/` và không có `Domain`.
+- `HttpOnly`, `Secure`, `SameSite=Lax`, `Priority=High`.
+- Giá trị là random opaque ID 256 bit; không phải Google token hay JWT chứa claims.
 
-Các kiểm soát này chưa thay thế authentication, authorization, validation nghiệp vụ, rate limiting, CSRF, audit bất biến, encryption at rest hoặc WAF.
+Transaction cookie dùng tên `__Secure-qts_oidc_tx`, chỉ áp dụng cho callback path và hết hạn sau tối đa 15 phút. Local HTTP dùng tên không có secure prefix và chỉ được phép ngoài production.
+
+## Audit auth
+
+Các event hiện có:
+
+- `auth_membership_not_found`: issuer, subject và email đã xác minh để provisioning.
+- `auth_login_succeeded`: issuer, subject, tenant và role.
+- `auth_logout_succeeded`: issuer, subject, tenant và role.
+- Lifecycle: `api_started`, `api_shutdown_started`, `api_shutdown_complete`.
+
+Không event nào chứa authorization code, Google token, client secret, session ID hoặc CSRF token. Stdout vẫn chứa dữ liệu định danh; chỉ hệ thống log được ủy quyền mới được đọc.
 
 ## Kiểm thử
 
@@ -92,25 +144,36 @@ npm run lint:backend
 npm run build:backend
 ```
 
-Test khởi tạo HTTP server thật trên cổng ngẫu nhiên và kiểm tra health, readiness, readiness thất bại, security headers, `404` và `405`.
+Test bao phủ:
 
-## Hướng dẫn vận hành
+- Cấu hình disabled/partial/production HTTPS.
+- Role hợp lệ và cấm mapping bằng email.
+- State, nonce, PKCE S256 và scope.
+- Callback một lần, claim validation và hosted domain.
+- Mapping `iss + sub` và từ chối account chưa cấp quyền.
+- Session cookie không chứa Google token/subject.
+- CSRF logout, cookie parsing, redirect và rate limit.
+- Health/readiness/security headers/404/405.
 
-1. Khởi động process bằng process manager có restart policy và giới hạn tài nguyên.
-2. Cấu hình liveness probe tới `/api/v1/health` và readiness probe tới `/api/v1/ready`.
-3. Chỉ đưa instance vào load balancer khi readiness trả `200`.
-4. Khi deploy, gửi `SIGTERM`, ngừng cấp request mới và chờ log `api_shutdown_complete`.
-5. Cảnh báo khi health/readiness lỗi, tỷ lệ `5xx` tăng, latency tăng hoặc process restart bất thường.
-6. Không log credential, token, ticket body, PII hoặc dữ liệu hạ tầng nhạy cảm.
+## Vận hành
 
-Readiness hiện chỉ phản ánh trạng thái process vì chưa có dependency. Khi thêm PostgreSQL, queue hoặc search engine, readiness phải kiểm tra dependency thiết yếu với timeout ngắn, không trả chi tiết nhạy cảm cho client.
+1. Cấp secret qua secret manager; không bake vào image.
+2. Chạy quality gate trước deploy.
+3. Chạy backend sau reverse proxy có TLS và WAF.
+4. Chỉ proxy `/api/*`; không bật CORS wildcard.
+5. Theo dõi auth event, `4xx/5xx`, latency và restart.
+6. Gửi `SIGTERM` khi deploy và chờ shutdown hoàn tất.
+7. Bảo vệ stdout log như dữ liệu định danh.
+8. Dùng shared session/transaction store trước khi chạy nhiều replica.
 
-## Thêm API nghiệp vụ
+Rate limiter mặc định dùng địa chỉ kết nối trực tiếp. Khi backend chỉ có thể được gọi qua một chuỗi reverse proxy đã kiểm soát, đặt `QTS_TRUST_PROXY_HOPS` đúng số hop để lấy IP từ phía phải của `X-Forwarded-For`. Cấu hình sai có thể cho phép giả mạo IP hoặc gom mọi người dùng vào một bucket. Reverse proxy/WAF vẫn phải áp dụng rate limit chính theo IP client.
 
-1. Cập nhật `docs/api/openapi.yaml` và chốt schema/permission trước.
-2. Viết test thất bại cho happy path, validation, authentication, authorization và cross-tenant denial.
-3. Triển khai route versioned dưới `/api/v1/`.
-4. Lấy tenant và role từ session đã xác minh, không lấy từ field do client tự quyết định.
-5. Dùng error envelope hiện tại và không lộ stack trace.
-6. Bổ sung rate limit, audit, idempotency và observability theo rủi ro endpoint.
-7. Chạy security review, SAST/SCA/secret scan và pentest trước go-live.
+## Giới hạn
+
+- Store trong RAM mất dữ liệu khi restart.
+- Membership chỉ nạp lúc process start.
+- Không có endpoint revoke một session riêng lẻ.
+- Readiness chưa kiểm tra Google hay shared dependency.
+- Chưa có authorization middleware cho API nghiệp vụ vì các API đó chưa tồn tại.
+
+Không triển khai nhiều replica hoặc mở dữ liệu khách hàng cho đến khi các giới hạn này được xử lý.

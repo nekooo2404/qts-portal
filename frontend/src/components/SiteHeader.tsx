@@ -47,7 +47,7 @@ export function SiteHeader() {
             />
             <span>
               <strong>QTS</strong>
-              <small>Công nghệ & An ninh</small>
+              <small>Công nghệ &amp; An ninh</small>
             </span>
           </a>
 

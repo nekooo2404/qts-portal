@@ -12,8 +12,8 @@ Phát triển QTS Portal từ baseline không có dữ liệu vận hành thành
 | Website công ty | Hoàn tất | Hoạt động tại `/company` |
 | Backend hạ tầng | Hoàn tất | Health, readiness, OpenAPI, timeout và graceful shutdown |
 | Loại bỏ dữ liệu cục bộ | Hoàn tất | Không còn record nghiệp vụ, tài khoản, phiên hoặc mutation trong frontend |
-| Trạng thái route khóa | Hoàn tất | Client/Internal Portal không hiển thị dữ liệu khi IAM/API chưa có |
-| IAM production | Chưa triển khai | Cần quyết định IdP, MFA, session và recovery |
+| Google OIDC foundation | Hoàn tất | Backend code flow, PKCE, claim validation, session cookie và RBAC gateway |
+| IAM production HA | Đang triển khai | Còn shared store, durable audit, revoke, recovery và kiểm chứng MFA policy |
 | API nghiệp vụ | Chưa triển khai | Cần domain contract, database và policy tenant |
 | Client Portal | Chưa triển khai | Chỉ bắt đầu sau IAM và API domain đầu tiên |
 | Internal Portal | Chưa triển khai | Chỉ bắt đầu sau IAM, quyền nội bộ và audit |
@@ -50,12 +50,13 @@ npm audit --audit-level=moderate
 
 ### Công việc
 
-1. Chọn IdP và ghi ADR cho OIDC/SAML, MFA, recovery và logout.
-2. Thiết kế tenant, membership, role, permission và privileged access.
-3. Tạo backend session exchange bằng cookie an toàn; không đưa bearer token vào browser storage.
-4. Thêm middleware authentication, authorization, tenant context và correlation ID.
-5. Tạo audit append-only cho login, logout, failure, role change và session revoke.
-6. Tích hợp cổng truy cập thật; route client/admin chỉ mở sau khi server xác nhận quyền.
+1. Hoàn tất: chọn Google OIDC và ghi ADR cho Authorization Code Flow, session và logout.
+2. Hoàn tất ở auth gateway: membership theo `iss + sub`, tenant, role và workspace.
+3. Hoàn tất: session cookie phía backend; không đưa Google token vào browser storage.
+4. Hoàn tất ở route auth: cổng client/admin chỉ mở sau khi backend xác nhận workspace.
+5. Còn lại: shared session store, session revoke, recovery và correlation ID.
+6. Còn lại: authorization/tenant middleware cho từng API nghiệp vụ.
+7. Còn lại: audit append-only cho failure, role change, revoke và privileged access.
 
 ### Tiêu chí chấp nhận
 
@@ -64,6 +65,8 @@ npm audit --audit-level=moderate
 - Test chéo tenant và role trái quyền luôn bị backend từ chối.
 - Cookie và security header được kiểm tra trên HTTPS staging.
 - Runbook account disable và emergency access được diễn tập.
+
+Các tiêu chí revoke, MFA evidence, shared store và audit bền vững chưa đạt; vì vậy Pha 1 chưa được coi là production-complete.
 
 ## 6. Pha 2 - Nền tảng dữ liệu và audit
 

@@ -6,9 +6,9 @@ info:
     name: Proprietary
     identifier: LicenseRef-Proprietary
   description: >-
-    Hợp đồng API nền tảng của QTS Portal. Bản hiện tại chỉ công khai các endpoint
-    hạ tầng; các API nghiệp vụ sẽ được bổ sung sau khi IAM và mô hình dữ liệu được
-    phê duyệt.
+    Hợp đồng API nền tảng và xác thực của QTS Portal. Google OpenID Connect chạy
+    hoàn toàn qua backend; frontend chỉ sử dụng session cookie cùng origin và
+    không nhận Google token.
 servers:
   - url: http://127.0.0.1:8080
     description: Môi trường phát triển local
@@ -49,8 +49,185 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/auth/status:
+    get:
+      operationId: getAuthStatus
+      summary: Kiểm tra Google OIDC đã được cấu hình hay chưa
+      tags: [Authentication]
+      security: []
+      responses:
+        "200":
+          description: Trạng thái cấu hình đăng nhập
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatusResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/auth/login/google:
+    get:
+      operationId: startGoogleLogin
+      summary: Bắt đầu Authorization Code Flow với Google
+      description: >-
+        Backend tạo state, nonce và PKCE S256 mới cho từng giao dịch, lưu dữ liệu
+        giao dịch phía server rồi chuyển trình duyệt đến Google.
+      tags: [Authentication]
+      security: []
+      parameters:
+        - in: query
+          name: returnTo
+          required: false
+          schema:
+            type: string
+            maxLength: 2048
+            default: "/"
+          description: Đường dẫn cùng origin sẽ mở sau khi xác thực thành công
+      responses:
+        "302":
+          description: Chuyển đến Google Authorization Endpoint
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: uri
+            Set-Cookie:
+              required: true
+              schema:
+                type: string
+              description: Cookie giao dịch HttpOnly, SameSite=Lax và Secure ở HTTPS
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          description: Vượt giới hạn bắt đầu phiên đăng nhập
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/auth/callback/google:
+    get:
+      operationId: completeGoogleLogin
+      summary: Nhận callback OpenID Connect từ Google tại backend
+      description: >-
+        Backend kiểm tra state, PKCE, chữ ký ID token, issuer, audience, expiry,
+        nonce, email_verified và hosted-domain (nếu cấu hình), sau đó ánh xạ
+        người dùng bằng cặp iss + sub.
+      tags: [Authentication]
+      security: []
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+      responses:
+        "303":
+          description: Tạo session và chuyển đến workspace được cấp quyền
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+            Set-Cookie:
+              required: true
+              schema:
+                type: string
+              description: Session cookie opaque, HttpOnly, SameSite=Lax và Secure ở HTTPS
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/auth/session:
+    get:
+      operationId: getSession
+      summary: Lấy phiên QTS hiện tại
+      tags: [Authentication]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Phiên còn hiệu lực
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      summary: Thu hồi session QTS hiện tại
+      tags: [Authentication]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Session đã bị thu hồi và cookie đã được xóa
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-qts_session
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
   responses:
+    BadRequest:
+      description: Tham số hoặc giao dịch đăng nhập không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Chưa có session hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Danh tính không được cấp quyền hoặc yêu cầu CSRF không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: Google OIDC chưa được cấu hình hoặc tạm thời không khả dụng
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     MethodNotAllowed:
       description: Phương thức HTTP không được hỗ trợ
       headers:
@@ -95,6 +272,70 @@ components:
             status:
               type: string
               const: ready
+    AuthStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [configured, provider]
+          properties:
+            configured:
+              type: boolean
+            provider:
+              type: string
+              const: google
+    SessionResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [user, authorization, csrfToken, expiresAt]
+          properties:
+            user:
+              type: object
+              additionalProperties: false
+              required: [email, displayName]
+              properties:
+                email:
+                  type: string
+                  format: email
+                displayName:
+                  type: string
+            authorization:
+              type: object
+              additionalProperties: false
+              required: [tenantId, role, workspace]
+              properties:
+                tenantId:
+                  type: string
+                role:
+                  $ref: "#/components/schemas/Role"
+                workspace:
+                  type: string
+                  enum: [client, internal]
+            csrfToken:
+              type: string
+            expiresAt:
+              type: string
+              format: date-time
+    Role:
+      type: string
+      enum:
+        - client_admin
+        - client_viewer
+        - billing
+        - technical
+        - soc_l1
+        - soc_l2
+        - soc_l3
+        - account_manager
+        - qts_admin
     ErrorResponse:
       type: object
       additionalProperties: false

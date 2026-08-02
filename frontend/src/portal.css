@@ -1973,6 +1973,58 @@
   color: var(--portal-text-muted);
 }
 
+.portal-session-details {
+  display: grid;
+  width: min(100%, 28rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-block: var(--space-sm);
+  border-block: 1px solid var(--portal-rule);
+  text-align: start;
+}
+
+.portal-session-details > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3xs);
+  padding-inline: var(--space-sm);
+}
+
+.portal-session-details > div + div {
+  border-inline-start: 1px solid var(--portal-rule);
+}
+
+.portal-session-details dt {
+  color: var(--portal-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.portal-session-details dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--portal-text);
+  font-family: var(--portal-font-display);
+  overflow-wrap: anywhere;
+}
+
+.portal-loading > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+.portal-loading svg,
+.auth-gateway .lucide-loader-circle {
+  animation: portal-spin 0.9s linear infinite;
+}
+
+@keyframes portal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .portal-loading {
   grid-template-columns: auto auto;
   min-height: 12rem;
