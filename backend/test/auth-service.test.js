@@ -121,7 +121,7 @@ test("callback ánh xạ bằng iss + sub, phát session opaque và không giữ
 
   const sessionId = result.sessionCookie.match(/^__Host-qts_session=([^;]+)/)?.[1];
   assert.ok(sessionId);
-  const session = auth.getSession(sessionId);
+  const session = await auth.getSession(sessionId);
   assert.deepEqual(session.user, {
     email: "security@qts.com.vn",
     displayName: "QTS Security",
@@ -207,16 +207,16 @@ test("logout yêu cầu CSRF token và thu hồi session phía server", async ()
   });
   const sessionId = login.sessionCookie.match(/^__Host-qts_session=([^;]+)/)?.[1];
   assert.ok(sessionId);
-  const session = auth.getSession(sessionId);
+  const session = await auth.getSession(sessionId);
 
-  assert.throws(
+  await assert.rejects(
     () => auth.logout(sessionId, "wrong-csrf-token"),
     (error) => error.code === "INVALID_CSRF_TOKEN",
   );
-  assert.equal(auth.getSession(sessionId).authorization.role, "client_admin");
+  assert.equal((await auth.getSession(sessionId)).authorization.role, "client_admin");
 
-  auth.logout(sessionId, session.csrfToken);
-  assert.throws(
+  await auth.logout(sessionId, session.csrfToken);
+  await assert.rejects(
     () => auth.getSession(sessionId),
     (error) => error.code === "SESSION_REQUIRED",
   );

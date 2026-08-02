@@ -11,11 +11,16 @@
     "dev:env": "node --env-file=.env --watch src/server.js",
     "start": "node src/server.js",
     "start:env": "node --env-file=.env src/server.js",
+    "db:migrate": "node scripts/database.js migrate",
+    "db:migrate:env": "node --env-file=.env scripts/database.js migrate",
+    "db:rollback": "node scripts/database.js rollback",
+    "db:rollback:env": "node --env-file=.env scripts/database.js rollback",
     "test": "node --test",
     "lint": "node scripts/check-js.js",
     "build": "npm run lint"
   },
   "dependencies": {
-    "openid-client": "6.8.4"
+    "openid-client": "6.8.4",
+    "pg": "8.22.0"
   }
 }

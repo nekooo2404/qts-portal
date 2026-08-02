@@ -311,7 +311,7 @@ export function createRequestHandler({
       if (!methodAllowed(request, response, "GET")) return;
       try {
         const cookies = parseCookies(request.headers.cookie);
-        const session = authService.getSession(
+        const session = await authService.getSession(
           cookies.get(authService.sessionCookieName),
         );
         writeJson(response, 200, { data: session });
@@ -329,7 +329,7 @@ export function createRequestHandler({
       if (!methodAllowed(request, response, "POST")) return;
       try {
         const cookies = parseCookies(request.headers.cookie);
-        authService.logout(
+        await authService.logout(
           cookies.get(authService.sessionCookieName),
           request.headers["x-csrf-token"],
         );

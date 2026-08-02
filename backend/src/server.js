@@ -3,13 +3,24 @@ import { createServer } from "node:http";
 import { createRequestHandler } from "./app.js";
 import { readAuthConfig } from "./auth-config.js";
 import { createAuthService } from "./auth-service.js";
+import { createPostgresExpiringStore } from "./auth-store.js";
+import {
+  checkDatabaseReady,
+  createDatabase,
+  readDatabaseConfig,
+} from "./database.js";
 import { createGoogleOidcClient } from "./google-oidc.js";
+import {
+  createAuthAuditWriter,
+  createMembershipRepository,
+} from "./membership-repository.js";
+import { runMigrations } from "./migrator.js";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8080;
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
-function writeAuditEvent(event) {
+function writeOperationalEvent(event) {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
@@ -43,20 +54,34 @@ export function readServerConfig(environment = process.env) {
   };
 }
 
-export function createApiServer({ environment = process.env } = {}) {
+export async function createApiServer({ environment = process.env } = {}) {
   const serverConfig = readServerConfig(environment);
   const authConfig = readAuthConfig(environment);
+  const database = createDatabase(readDatabaseConfig(environment));
+  await runMigrations(database);
+  const membershipRepository = createMembershipRepository(database);
+  await membershipRepository.bootstrap(authConfig.memberships ?? []);
   const oidcClient = authConfig.enabled
     ? createGoogleOidcClient(authConfig)
     : undefined;
   const authService = createAuthService({
     config: authConfig,
     oidcClient,
-    audit: writeAuditEvent,
+    audit: createAuthAuditWriter(database),
+    membershipResolver: (input) => membershipRepository.resolve(input),
+    transactionStore: createPostgresExpiringStore({
+      database,
+      storeName: "transaction",
+    }),
+    sessionStore: createPostgresExpiringStore({
+      database,
+      storeName: "session",
+    }),
   });
   const server = createServer(
     createRequestHandler({
       authService,
+      isReady: () => checkDatabaseReady(database),
       trustedProxyHops: serverConfig.trustedProxyHops,
     }),
   );
@@ -65,11 +90,12 @@ export function createApiServer({ environment = process.env } = {}) {
   server.keepAliveTimeout = 5_000;
   server.maxHeadersCount = 100;
   server.on("clientError", (_error, socket) => socket.destroy());
+  server.database = database;
   return server;
 }
 
 const config = readServerConfig();
-const server = createApiServer();
+const server = await createApiServer();
 let shuttingDown = false;
 
 function shutdown(signal) {
@@ -78,9 +104,7 @@ function shutdown(signal) {
   }
 
   shuttingDown = true;
-  process.stdout.write(
-    `${JSON.stringify({ event: "api_shutdown_started", signal })}\n`,
-  );
+  writeOperationalEvent({ event: "api_shutdown_started", signal });
 
   const shutdownTimer = setTimeout(() => {
     process.stderr.write(
@@ -91,7 +115,7 @@ function shutdown(signal) {
   }, SHUTDOWN_TIMEOUT_MS);
   shutdownTimer.unref();
 
-  server.close((error) => {
+  server.close(async (error) => {
     clearTimeout(shutdownTimer);
     if (error) {
       process.stderr.write(
@@ -101,7 +125,8 @@ function shutdown(signal) {
       return;
     }
 
-    process.stdout.write(`${JSON.stringify({ event: "api_shutdown_complete" })}\n`);
+    await server.database.end();
+    writeOperationalEvent({ event: "api_shutdown_complete" });
   });
 }
 
@@ -113,13 +138,11 @@ server.on("error", (error) => {
 });
 
 server.listen(config.port, config.host, () => {
-  process.stdout.write(
-    `${JSON.stringify({
-      event: "api_started",
-      host: config.host,
-      port: config.port,
-    })}\n`,
-  );
+  writeOperationalEvent({
+    event: "api_started",
+    host: config.host,
+    port: config.port,
+  });
 });
 
 process.once("SIGINT", () => shutdown("SIGINT"));

@@ -1,0 +1,22 @@
+name: qts-portal
+
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: qts_portal
+      POSTGRES_USER: qts
+      POSTGRES_PASSWORD: ${QTS_POSTGRES_PASSWORD:?Set QTS_POSTGRES_PASSWORD in backend/.env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qts -d qts_portal"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    volumes:
+      - qts_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  qts_postgres_data:

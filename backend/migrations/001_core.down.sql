@@ -1,0 +1,17 @@
+DROP TABLE IF EXISTS audit_events;
+DROP FUNCTION IF EXISTS qts_reject_audit_mutation();
+DROP TABLE IF EXISTS soc_shifts;
+DROP TABLE IF EXISTS integrations;
+DROP TABLE IF EXISTS knowledge_articles;
+DROP TABLE IF EXISTS documents;
+DROP TABLE IF EXISTS invoices;
+DROP TABLE IF EXISTS contracts;
+DROP TABLE IF EXISTS ticket_comments;
+DROP TABLE IF EXISTS tickets;
+DROP TABLE IF EXISTS alerts;
+DROP TABLE IF EXISTS licenses;
+DROP TABLE IF EXISTS assets;
+DROP TABLE IF EXISTS auth_records;
+DROP TABLE IF EXISTS invitations;
+DROP TABLE IF EXISTS memberships;
+DROP TABLE IF EXISTS tenants;

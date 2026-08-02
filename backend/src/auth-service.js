@@ -124,6 +124,7 @@ export function createAuthService({
   oidcClient,
   now = Date.now,
   audit = () => {},
+  membershipResolver,
   transactionStore = createMemoryExpiringStore({ now }),
   sessionStore = createMemoryExpiringStore({ now }),
 } = {}) {
@@ -156,9 +157,9 @@ export function createAuthService({
     });
   }
 
-  function emitAudit(event) {
+  async function emitAudit(event) {
     try {
-      audit(Object.freeze(event));
+      await audit(Object.freeze(event));
     } catch {
       // Authentication must not depend on the availability of a log transport.
     }
@@ -182,7 +183,7 @@ export function createAuthService({
         redirectUri: config.redirectUri,
       });
       const expiresAt = now() + config.transactionTtlMs;
-      transactionStore.set(
+      await transactionStore.set(
         transaction.state,
         {
           nonce: transaction.nonce,
@@ -210,7 +211,7 @@ export function createAuthService({
         fail(400, "INVALID_AUTH_TRANSACTION", "Giao dịch đăng nhập không hợp lệ hoặc đã hết hạn.");
       }
 
-      const transaction = transactionStore.take(returnedState);
+      const transaction = await transactionStore.take(returnedState);
       if (!transaction) {
         fail(400, "INVALID_AUTH_TRANSACTION", "Giao dịch đăng nhập không hợp lệ hoặc đã hết hạn.");
       }
@@ -235,9 +236,12 @@ export function createAuthService({
         now: now(),
       });
 
-      const membership = membershipByIdentity.get(`${claims.iss}\u0000${claims.sub}`);
+      const configuredMembership = membershipByIdentity.get(`${claims.iss}\u0000${claims.sub}`);
+      const membership = membershipResolver
+        ? await membershipResolver({ claims, configuredMembership })
+        : configuredMembership;
       if (!membership) {
-        emitAudit({
+        await emitAudit({
           event: "auth_membership_not_found",
           issuer: claims.iss,
           subject: claims.sub,
@@ -249,7 +253,7 @@ export function createAuthService({
       const sessionId = randomIdentifier();
       const csrfToken = randomIdentifier();
       const expiresAt = now() + config.sessionTtlMs;
-      sessionStore.set(
+      await sessionStore.set(
         sessionId,
         {
           identity: { issuer: claims.iss, subject: claims.sub },
@@ -270,7 +274,7 @@ export function createAuthService({
         },
         expiresAt,
       );
-      emitAudit({
+      await emitAudit({
         event: "auth_login_succeeded",
         issuer: claims.iss,
         subject: claims.sub,
@@ -289,22 +293,38 @@ export function createAuthService({
       };
     },
 
-    getSession(sessionId) {
+    async getSession(sessionId) {
       if (!sessionId) fail(401, "SESSION_REQUIRED", "Cần đăng nhập để tiếp tục.");
-      const record = sessionStore.get(sessionId);
+      const record = await sessionStore.get(sessionId);
       if (!record) fail(401, "SESSION_REQUIRED", "Phiên đăng nhập không tồn tại hoặc đã hết hạn.");
       return publicSession(record);
     },
 
-    logout(sessionId, csrfToken) {
+    async authenticateSession(sessionId, csrfToken) {
       if (!sessionId) fail(401, "SESSION_REQUIRED", "Cần đăng nhập để tiếp tục.");
-      const record = sessionStore.get(sessionId);
+      const record = await sessionStore.get(sessionId);
+      if (!record) fail(401, "SESSION_REQUIRED", "Phiên đăng nhập không tồn tại hoặc đã hết hạn.");
+      if (csrfToken !== undefined && !secureEqual(record.csrfToken, csrfToken)) {
+        fail(403, "INVALID_CSRF_TOKEN", "CSRF token không hợp lệ.");
+      }
+      return {
+        identity: { ...record.identity },
+        user: { ...record.user },
+        authorization: { ...record.authorization },
+        csrfToken: record.csrfToken,
+        expiresAt: record.expiresAt,
+      };
+    },
+
+    async logout(sessionId, csrfToken) {
+      if (!sessionId) fail(401, "SESSION_REQUIRED", "Cần đăng nhập để tiếp tục.");
+      const record = await sessionStore.get(sessionId);
       if (!record) fail(401, "SESSION_REQUIRED", "Phiên đăng nhập không tồn tại hoặc đã hết hạn.");
       if (!secureEqual(record.csrfToken, csrfToken)) {
         fail(403, "INVALID_CSRF_TOKEN", "CSRF token không hợp lệ.");
       }
-      sessionStore.delete(sessionId);
-      emitAudit({
+      await sessionStore.delete(sessionId);
+      await emitAudit({
         event: "auth_logout_succeeded",
         issuer: record.identity.issuer,
         subject: record.identity.subject,
