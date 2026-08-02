@@ -15,6 +15,9 @@ import {
   createMembershipRepository,
 } from "./membership-repository.js";
 import { runMigrations } from "./migrator.js";
+import { createPortalRepository } from "./portal-repository.js";
+import { createPortalService } from "./portal-service.js";
+import { createSecretCipher } from "./secret-crypto.js";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8080;
@@ -61,6 +64,15 @@ export async function createApiServer({ environment = process.env } = {}) {
   await runMigrations(database);
   const membershipRepository = createMembershipRepository(database);
   await membershipRepository.bootstrap(authConfig.memberships ?? []);
+  const portalRepository = createPortalRepository(database, {
+    secretCipher: createSecretCipher({
+      encodedKey: environment.QTS_DATA_ENCRYPTION_KEY,
+    }),
+  });
+  const portalService = createPortalService({
+    membershipRepository,
+    repository: portalRepository,
+  });
   const oidcClient = authConfig.enabled
     ? createGoogleOidcClient(authConfig)
     : undefined;
@@ -82,6 +94,7 @@ export async function createApiServer({ environment = process.env } = {}) {
     createRequestHandler({
       authService,
       isReady: () => checkDatabaseReady(database),
+      portalService,
       trustedProxyHops: serverConfig.trustedProxyHops,
     }),
   );

@@ -14,6 +14,19 @@ const RESOURCE_DEFINITIONS = Object.freeze({
       "sla_critical_minutes", "sla_high_minutes", "sla_medium_minutes",
       "sla_low_minutes", "version", "created_at", "updated_at",
     ],
+    updateFields: {
+      name: "name",
+      status: "status",
+      serviceTier: "service_tier",
+      emergencyContactName: "emergency_contact_name",
+      emergencyContactEmail: "emergency_contact_email",
+      emergencyContactPhone: "emergency_contact_phone",
+      notes: "notes",
+      slaCriticalMinutes: "sla_critical_minutes",
+      slaHighMinutes: "sla_high_minutes",
+      slaMediumMinutes: "sla_medium_minutes",
+      slaLowMinutes: "sla_low_minutes",
+    },
     filters: { status: "status", serviceTier: "service_tier" },
     sorts: { name: "name", status: "status", createdAt: "created_at" },
     search: ["id", "name", "emergency_contact_name", "emergency_contact_email"],
@@ -145,6 +158,136 @@ const RESOURCE_DEFINITIONS = Object.freeze({
     },
     search: ["product_name", "vendor", "license_reference"],
   },
+  contracts: {
+    table: "contracts",
+    columns: [
+      "id", "tenant_id", "contract_number", "title", "status", "starts_at",
+      "expires_at", "currency", "total_amount", "version", "created_at", "updated_at",
+    ],
+    createFields: {
+      contractNumber: "contract_number",
+      title: "title",
+      status: "status",
+      startsAt: "starts_at",
+      expiresAt: "expires_at",
+      currency: "currency",
+      totalAmount: "total_amount",
+    },
+    updateFields: {
+      title: "title",
+      status: "status",
+      expiresAt: "expires_at",
+      currency: "currency",
+      totalAmount: "total_amount",
+    },
+    filters: { status: "status", currency: "currency" },
+    sorts: { title: "title", startsAt: "starts_at", expiresAt: "expires_at", status: "status", createdAt: "created_at" },
+    search: ["contract_number", "title"],
+  },
+  invoices: {
+    table: "invoices",
+    columns: [
+      "id", "tenant_id", "contract_id", "invoice_number", "amount", "currency",
+      "status", "issued_at", "due_at", "paid_at", "version", "created_at", "updated_at",
+    ],
+    createFields: {
+      contractId: "contract_id",
+      invoiceNumber: "invoice_number",
+      amount: "amount",
+      currency: "currency",
+      status: "status",
+      issuedAt: "issued_at",
+      dueAt: "due_at",
+    },
+    updateFields: {
+      status: "status",
+      issuedAt: "issued_at",
+      dueAt: "due_at",
+      paidAt: "paid_at",
+    },
+    filters: { status: "status", currency: "currency" },
+    sorts: { invoiceNumber: "invoice_number", issuedAt: "issued_at", dueAt: "due_at", status: "status", createdAt: "created_at" },
+    search: ["invoice_number"],
+  },
+  documents: {
+    table: "documents",
+    columns: [
+      "id", "tenant_id", "type", "title", "description", "filename", "media_type",
+      "byte_size", "content_sha256", "published_at", "created_at",
+    ],
+    filters: { type: "type", mediaType: "media_type" },
+    sorts: { title: "title", publishedAt: "published_at", createdAt: "created_at" },
+    search: ["title", "description", "filename"],
+  },
+  knowledge: {
+    table: "knowledge_articles",
+    allowsGlobalTenant: true,
+    columns: [
+      "id", "tenant_id", "title", "summary", "body", "category", "audience",
+      "status", "version", "published_at", "created_at", "updated_at",
+    ],
+    createFields: {
+      title: "title",
+      summary: "summary",
+      body: "body",
+      category: "category",
+      audience: "audience",
+      status: "status",
+      publishedAt: "published_at",
+    },
+    updateFields: {
+      title: "title",
+      summary: "summary",
+      body: "body",
+      category: "category",
+      audience: "audience",
+      status: "status",
+    },
+    filters: { category: "category", audience: "audience", status: "status" },
+    sorts: { title: "title", publishedAt: "published_at", updatedAt: "updated_at", createdAt: "created_at" },
+    search: ["title", "summary", "body", "category"],
+  },
+  integrations: {
+    table: "integrations",
+    columns: [
+      "id", "tenant_id", "name", "type", "endpoint_url", "status", "secret_hint",
+      "last_checked_at", "version", "created_at", "updated_at",
+    ],
+    computedColumns: ["(r.secret_ciphertext IS NOT NULL) AS has_secret"],
+    updateFields: {
+      name: "name",
+      endpointUrl: "endpoint_url",
+      status: "status",
+    },
+    filters: { type: "type", status: "status" },
+    sorts: { name: "name", type: "type", status: "status", updatedAt: "updated_at" },
+    search: ["name", "type", "endpoint_url"],
+  },
+  shifts: {
+    table: "soc_shifts",
+    columns: [
+      "id", "tenant_id", "engineer_name", "level", "starts_at", "ends_at",
+      "handover_notes", "status", "version", "created_at", "updated_at",
+    ],
+    createFields: {
+      engineerName: "engineer_name",
+      level: "level",
+      startsAt: "starts_at",
+      endsAt: "ends_at",
+      handoverNotes: "handover_notes",
+      status: "status",
+    },
+    updateFields: {
+      engineerName: "engineer_name",
+      startsAt: "starts_at",
+      endsAt: "ends_at",
+      handoverNotes: "handover_notes",
+      status: "status",
+    },
+    filters: { level: "level", status: "status" },
+    sorts: { startsAt: "starts_at", endsAt: "ends_at", engineerName: "engineer_name", status: "status" },
+    search: ["engineer_name", "handover_notes"],
+  },
 });
 
 function camelCase(value) {
@@ -168,13 +311,19 @@ function definitionFor(resource) {
   return definition;
 }
 
-function whereForList(definition, scope, query) {
+function whereForList(definition, scope, query, actor) {
   const parameters = [];
   const clauses = [];
   const tenantColumn = definition.tenantColumn ?? "tenant_id";
   if (scope.tenantId) {
     parameters.push(scope.tenantId);
-    clauses.push(`r.${tenantColumn} = $${parameters.length}`);
+    clauses.push(definition.allowsGlobalTenant
+      ? `(r.${tenantColumn} = $${parameters.length} OR r.${tenantColumn} IS NULL)`
+      : `r.${tenantColumn} = $${parameters.length}`);
+  }
+  if (definition.table === "knowledge_articles" && actor?.authorization.workspace === "client") {
+    clauses.push("r.status = 'PUBLISHED'");
+    clauses.push("r.audience IN ('CLIENT', 'ALL')");
   }
   for (const [key, value] of Object.entries(query.filters)) {
     const column = definition.filters[key];
@@ -194,8 +343,10 @@ function whereForList(definition, scope, query) {
 }
 
 function selectColumns(definition, includeTenantName) {
-  const columns = definition.columns.map((column) => `r.${column}`).join(", ");
-  return includeTenantName ? `${columns}, t.name AS tenant_name` : columns;
+  const selected = definition.columns.map((column) => `r.${column}`);
+  selected.push(...(definition.computedColumns ?? []));
+  if (includeTenantName) selected.push("t.name AS tenant_name");
+  return selected.join(", ");
 }
 
 async function appendAudit(client, { actor, context, action, resource, resourceId, tenantId, metadata }) {
@@ -243,7 +394,7 @@ function slaColumnForSeverity(severity) {
   }[severity];
 }
 
-export function createPortalRepository(database) {
+export function createPortalRepository(database, { secretCipher } = {}) {
   if (!database) throw new Error("Portal repository requires a database.");
 
   return Object.freeze({
@@ -353,12 +504,14 @@ export function createPortalRepository(database) {
       });
     },
 
-    async listResources({ resource, scope, query }) {
+    async listResources({ actor, resource, scope, query }) {
       const definition = definitionFor(resource);
       return withDatabaseScope(database, scope, async (client) => {
-        const where = whereForList(definition, scope, query);
+        const where = whereForList(definition, scope, query, actor);
         const includeTenantName = resource !== "tenants";
-        const join = includeTenantName ? "JOIN tenants t ON t.id = r.tenant_id" : "";
+        const join = includeTenantName
+          ? `${definition.allowsGlobalTenant ? "LEFT" : "INNER"} JOIN tenants t ON t.id = r.tenant_id`
+          : "";
         const countResult = await client.query(
           `SELECT count(*)::int AS total
            FROM ${definition.table} r
@@ -489,6 +642,456 @@ export function createPortalRepository(database) {
       });
     },
 
+    async createTenant({ actor, context, data, scope }) {
+      return withDatabaseScope(database, scope, async (client) => {
+        const fields = {
+          name: "name",
+          status: "status",
+          serviceTier: "service_tier",
+          emergencyContactName: "emergency_contact_name",
+          emergencyContactEmail: "emergency_contact_email",
+          emergencyContactPhone: "emergency_contact_phone",
+          notes: "notes",
+          slaCriticalMinutes: "sla_critical_minutes",
+          slaHighMinutes: "sla_high_minutes",
+          slaMediumMinutes: "sla_medium_minutes",
+          slaLowMinutes: "sla_low_minutes",
+        };
+        const entries = Object.entries(fields).filter(([key]) => data[key] !== undefined);
+        const columns = ["id", ...entries.map(([, column]) => column)];
+        const values = [data.id, ...entries.map(([key]) => data[key])];
+        const result = await client.query(
+          `INSERT INTO tenants (${columns.join(", ")})
+           VALUES (${values.map((_item, index) => `$${index + 1}`).join(", ")})
+           RETURNING ${RESOURCE_DEFINITIONS.tenants.columns.join(", ")}`,
+          values,
+        );
+        await appendAudit(client, {
+          actor,
+          context,
+          action: "tenants.create",
+          resource: "tenants",
+          resourceId: data.id,
+          tenantId: data.id,
+          metadata: { fields: entries.map(([key]) => key) },
+        });
+        return serializeDatabaseRow(result.rows[0]);
+      });
+    },
+
+    async createDocument({ actor, context, data, scope }) {
+      const id = randomUUID();
+      return withDatabaseScope(database, scope, async (client) => {
+        const result = await client.query(
+          `INSERT INTO documents (
+             id, tenant_id, type, title, description, filename, media_type,
+             byte_size, content_sha256, content, created_by_issuer, created_by_subject
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           RETURNING ${RESOURCE_DEFINITIONS.documents.columns.join(", ")}`,
+          [
+            id,
+            data.tenantId,
+            data.type,
+            data.title,
+            data.description ?? null,
+            data.filename,
+            data.mediaType,
+            data.byteSize,
+            data.contentSha256,
+            data.content,
+            actor.identity.issuer,
+            actor.identity.subject,
+          ],
+        );
+        await appendAudit(client, {
+          actor,
+          context,
+          action: "documents.create",
+          resource: "documents",
+          resourceId: id,
+          tenantId: data.tenantId,
+          metadata: {
+            mediaType: data.mediaType,
+            byteSize: data.byteSize,
+            contentSha256: data.contentSha256,
+          },
+        });
+        return serializeDatabaseRow(result.rows[0]);
+      });
+    },
+
+    async getDocument({ actor, context, id, scope }) {
+      return withDatabaseScope(database, scope, async (client) => {
+        const result = await client.query(
+          `SELECT id, tenant_id, title, filename, media_type, byte_size,
+                  content_sha256, content
+           FROM documents
+           WHERE id = $1`,
+          [id],
+        );
+        if (result.rowCount === 0) portalFail(404, "DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu.");
+        const row = result.rows[0];
+        await appendAudit(client, {
+          actor,
+          context,
+          action: "documents.download",
+          resource: "documents",
+          resourceId: id,
+          tenantId: row.tenant_id,
+          metadata: { contentSha256: row.content_sha256 },
+        });
+        return {
+          id: row.id,
+          tenantId: row.tenant_id,
+          title: row.title,
+          filename: row.filename,
+          mediaType: row.media_type,
+          byteSize: row.byte_size,
+          contentSha256: row.content_sha256,
+          content: row.content,
+        };
+      });
+    },
+
+    async createIntegration({ actor, context, data, scope }) {
+      if (data.secret && !secretCipher) {
+        portalFail(503, "SECRET_STORAGE_UNAVAILABLE", "Kho mã hóa secret chưa được cấu hình.");
+      }
+      const id = randomUUID();
+      const secretCiphertext = data.secret ? secretCipher.encrypt(data.secret) : null;
+      const secretHint = data.secret ? data.secret.slice(-4) : null;
+      return withDatabaseScope(database, scope, async (client) => {
+        const result = await client.query(
+          `INSERT INTO integrations (
+             id, tenant_id, name, type, endpoint_url, secret_ciphertext, secret_hint
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING id, tenant_id, name, type, endpoint_url, status, secret_hint,
+                     (secret_ciphertext IS NOT NULL) AS has_secret,
+                     last_checked_at, version, created_at, updated_at`,
+          [
+            id,
+            data.tenantId,
+            data.name,
+            data.type,
+            data.endpointUrl,
+            secretCiphertext,
+            secretHint,
+          ],
+        );
+        await appendAudit(client, {
+          actor,
+          context,
+          action: "integrations.create",
+          resource: "integrations",
+          resourceId: id,
+          tenantId: data.tenantId,
+          metadata: { type: data.type, hasSecret: Boolean(data.secret) },
+        });
+        return serializeDatabaseRow(result.rows[0]);
+      });
+    },
+
+    async updateIntegration({ actor, context, data, id, scope }) {
+      if (data.secret && !secretCipher) {
+        portalFail(503, "SECRET_STORAGE_UNAVAILABLE", "Kho mã hóa secret chưa được cấu hình.");
+      }
+      return withDatabaseScope(database, scope, async (client) => {
+        const definition = RESOURCE_DEFINITIONS.integrations;
+        const entries = Object.entries(definition.updateFields)
+          .filter(([key]) => data[key] !== undefined);
+        const values = entries.map(([key]) => data[key]);
+        const assignments = entries.map(([, column], index) => `${column} = $${index + 1}`);
+        if (data.secret) {
+          values.push(secretCipher.encrypt(data.secret), data.secret.slice(-4));
+          assignments.push(
+            `secret_ciphertext = $${values.length - 1}`,
+            `secret_hint = $${values.length}`,
+          );
+        }
+        values.push(id, data.expectedVersion);
+        const result = await client.query(
+          `UPDATE integrations
+           SET ${assignments.join(", ")}, version = version + 1, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $${values.length - 1} AND version = $${values.length}
+           RETURNING id, tenant_id, name, type, endpoint_url, status, secret_hint,
+                     (secret_ciphertext IS NOT NULL) AS has_secret,
+                     last_checked_at, version, created_at, updated_at`,
+          values,
+        );
+        if (result.rowCount === 0) {
+          const existing = await client.query("SELECT version FROM integrations WHERE id = $1", [id]);
+          if (existing.rowCount > 0) portalFail(409, "VERSION_CONFLICT", "Tích hợp đã thay đổi; hãy tải lại.");
+          portalFail(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tích hợp.");
+        }
+        const row = serializeDatabaseRow(result.rows[0]);
+        await appendAudit(client, {
+          actor,
+          context,
+          action: "integrations.update",
+          resource: "integrations",
+          resourceId: id,
+          tenantId: row.tenantId,
+          metadata: {
+            fields: [...entries.map(([key]) => key), ...(data.secret ? ["secret"] : [])],
+            previousVersion: data.expectedVersion,
+          },
+        });
+        return row;
+      });
+    },
+
+    async listTicketComments({ actor, id, scope }) {
+      return withDatabaseScope(database, scope, async (client) => {
+        const ticket = await client.query("SELECT id FROM tickets WHERE id = $1", [id]);
+        if (ticket.rowCount === 0) portalFail(404, "TICKET_NOT_FOUND", "Không tìm thấy ticket.");
+        const result = await client.query(
+          `SELECT id, ticket_id, author_name, visibility, body, created_at
+           FROM ticket_comments
+           WHERE ticket_id = $1
+             ${actor.authorization.workspace === "client" ? "AND visibility = 'CUSTOMER'" : ""}
+           ORDER BY created_at ASC, id ASC`,
+          [id],
+        );
+        return result.rows.map(serializeDatabaseRow);
+      });
+    },
+
+    async createTicketComment({ actor, context, data, id, scope }) {
+      const commentId = randomUUID();
+      return withDatabaseScope(database, scope, async (client) => {
+        const ticket = await client.query(
+          "SELECT tenant_id FROM tickets WHERE id = $1 FOR UPDATE",
+          [id],
+        );
+        if (ticket.rowCount === 0) portalFail(404, "TICKET_NOT_FOUND", "Không tìm thấy ticket.");
+        const result = await client.query(
+          `INSERT INTO ticket_comments (
+             id, tenant_id, ticket_id, author_issuer, author_subject,
+             author_name, visibility, body
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING id, ticket_id, author_name, visibility, body, created_at`,
+          [
+            commentId,
+            ticket.rows[0].tenant_id,
+            id,
+            actor.identity.issuer,
+            actor.identity.subject,
+            actor.user.displayName,
+            data.visibility,
+            data.body,
+          ],
+        );
+        if (actor.authorization.workspace === "internal") {
+          await client.query(
+            `UPDATE tickets
+             SET first_response_at = COALESCE(first_response_at, CURRENT_TIMESTAMP),
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1`,
+            [id],
+          );
+        }
+        await appendAudit(client, {
+          actor,
+          context,
+          action: "tickets.comment",
+          resource: "tickets",
+          resourceId: id,
+          tenantId: ticket.rows[0].tenant_id,
+          metadata: { visibility: data.visibility },
+        });
+        return serializeDatabaseRow(result.rows[0]);
+      });
+    },
+
+    async listMembers({ scope, query }) {
+      return withDatabaseScope(database, scope, async (client) => {
+        const parameters = [];
+        const clauses = [];
+        if (scope.tenantId) {
+          parameters.push(scope.tenantId);
+          clauses.push(`m.tenant_id = $${parameters.length}`);
+        }
+        if (query.filters.role) {
+          parameters.push(query.filters.role);
+          clauses.push(`m.role = $${parameters.length}`);
+        }
+        if (query.filters.status) {
+          parameters.push(query.filters.status);
+          clauses.push(`m.status = $${parameters.length}`);
+        }
+        if (query.search) {
+          parameters.push(`%${query.search}%`);
+          clauses.push(`(m.email ILIKE $${parameters.length} OR m.display_name ILIKE $${parameters.length})`);
+        }
+        const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+        const count = await client.query(`SELECT count(*)::int AS total FROM memberships m ${where}`, parameters);
+        const offset = (query.page - 1) * query.pageSize;
+        const values = [...parameters, query.pageSize, offset];
+        const result = await client.query(
+          `SELECT m.id, m.tenant_id, t.name AS tenant_name, m.email, m.display_name,
+                  m.role, m.workspace, m.status, m.last_login_at, m.version, m.created_at
+           FROM memberships m
+           JOIN tenants t ON t.id = m.tenant_id
+           ${where}
+           ORDER BY m.created_at DESC, m.id
+           LIMIT $${values.length - 1} OFFSET $${values.length}`,
+          values,
+        );
+        const totalItems = count.rows[0].total;
+        return {
+          data: result.rows.map(serializeDatabaseRow),
+          pagination: {
+            page: query.page,
+            pageSize: query.pageSize,
+            totalItems,
+            totalPages: Math.ceil(totalItems / query.pageSize),
+          },
+        };
+      });
+    },
+
+    async updateMember({ actor, context, data, id, scope, workspaceForRole }) {
+      return withDatabaseScope(database, scope, async (client) => {
+        const existing = await client.query(
+          `SELECT id, issuer, subject, tenant_id, role, workspace, status, version
+           FROM memberships WHERE id = $1 FOR UPDATE`,
+          [id],
+        );
+        if (existing.rowCount === 0) portalFail(404, "MEMBER_NOT_FOUND", "Không tìm thấy thành viên.");
+        const member = existing.rows[0];
+        if (
+          member.issuer === actor.identity.issuer &&
+          member.subject === actor.identity.subject &&
+          (data.status === "DISABLED" || (data.role && data.role !== member.role))
+        ) {
+          portalFail(409, "SELF_LOCKOUT_DENIED", "Không thể tự vô hiệu hóa hoặc đổi role của chính mình.");
+        }
+        if (member.version !== data.expectedVersion) {
+          portalFail(409, "VERSION_CONFLICT", "Thành viên đã thay đổi; hãy tải lại.");
+        }
+        const role = data.role ?? member.role;
+        const status = data.status ?? member.status;
+        const result = await client.query(
+          `UPDATE memberships
+           SET role = $2, workspace = $3, status = $4,
+               version = version + 1, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1 AND version = $5
+           RETURNING id, tenant_id, email, display_name, role, workspace,
+                     status, last_login_at, version, created_at`,
+          [id, role, workspaceForRole(role), status, data.expectedVersion],
+        );
+        if (data.role || data.status === "DISABLED") {
+          await client.query(
+            `DELETE FROM auth_records
+             WHERE store_name = 'session'
+               AND value->'identity'->>'issuer' = $1
+               AND value->'identity'->>'subject' = $2`,
+            [member.issuer, member.subject],
+          );
+        }
+        await appendAudit(client, {
+          actor,
+          context,
+          action: "members.update",
+          resource: "members",
+          resourceId: id,
+          tenantId: member.tenant_id,
+          metadata: { fields: Object.keys(data).filter((key) => key !== "expectedVersion") },
+        });
+        return serializeDatabaseRow(result.rows[0]);
+      });
+    },
+
+    async listInvitations({ scope, query }) {
+      return withDatabaseScope(database, scope, async (client) => {
+        const parameters = [];
+        const clauses = [];
+        if (scope.tenantId) {
+          parameters.push(scope.tenantId);
+          clauses.push(`i.tenant_id = $${parameters.length}`);
+        }
+        if (query.filters.status) {
+          parameters.push(query.filters.status);
+          clauses.push(`i.status = $${parameters.length}`);
+        }
+        const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+        const count = await client.query(`SELECT count(*)::int AS total FROM invitations i ${where}`, parameters);
+        const offset = (query.page - 1) * query.pageSize;
+        const values = [...parameters, query.pageSize, offset];
+        const result = await client.query(
+          `SELECT i.id, i.tenant_id, t.name AS tenant_name, i.email, i.role,
+                  i.status, i.expires_at, i.created_at, i.accepted_at
+           FROM invitations i
+           JOIN tenants t ON t.id = i.tenant_id
+           ${where}
+           ORDER BY i.created_at DESC, i.id
+           LIMIT $${values.length - 1} OFFSET $${values.length}`,
+          values,
+        );
+        const totalItems = count.rows[0].total;
+        return {
+          data: result.rows.map(serializeDatabaseRow),
+          pagination: {
+            page: query.page,
+            pageSize: query.pageSize,
+            totalItems,
+            totalPages: Math.ceil(totalItems / query.pageSize),
+          },
+        };
+      });
+    },
+
+    async listAudit({ actor, scope, query }) {
+      return withDatabaseScope(database, scope, async (client) => {
+        const parameters = [];
+        const clauses = [];
+        if (scope.tenantId) {
+          parameters.push(scope.tenantId);
+          clauses.push(`a.tenant_id = $${parameters.length}`);
+        }
+        for (const [key, column] of Object.entries({
+          action: "action",
+          outcome: "outcome",
+          resourceType: "resource_type",
+        })) {
+          if (!query.filters[key]) continue;
+          parameters.push(query.filters[key]);
+          clauses.push(`a.${column} = $${parameters.length}`);
+        }
+        if (query.search) {
+          parameters.push(`%${query.search}%`);
+          clauses.push(`(a.action ILIKE $${parameters.length} OR a.resource_id ILIKE $${parameters.length})`);
+        }
+        const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+        const count = await client.query(`SELECT count(*)::int AS total FROM audit_events a ${where}`, parameters);
+        const offset = (query.page - 1) * query.pageSize;
+        const values = [...parameters, query.pageSize, offset];
+        const identityColumns = actor.authorization.workspace === "internal"
+          ? "a.actor_issuer, a.actor_subject,"
+          : "";
+        const result = await client.query(
+          `SELECT a.id, a.tenant_id, ${identityColumns} a.actor_role, a.action,
+                  a.resource_type, a.resource_id, a.outcome, a.request_id,
+                  a.metadata, a.created_at
+           FROM audit_events a
+           ${where}
+           ORDER BY a.created_at DESC, a.id DESC
+           LIMIT $${values.length - 1} OFFSET $${values.length}`,
+          values,
+        );
+        const totalItems = count.rows[0].total;
+        return {
+          data: result.rows.map(serializeDatabaseRow),
+          pagination: {
+            page: query.page,
+            pageSize: query.pageSize,
+            totalItems,
+            totalPages: Math.ceil(totalItems / query.pageSize),
+          },
+        };
+      });
+    },
+
     async updateResource({ actor, context, data, id, resource, scope }) {
       const definition = definitionFor(resource);
       const expectedVersion = data.expectedVersion;
@@ -498,15 +1101,47 @@ export function createPortalRepository(database) {
         const values = entries.map(([key]) => data[key]);
         const assignments = entries.map(([, column], index) => `${column} = $${index + 1}`);
         if (resource === "tickets" && data.status) {
+          const statusIndex = entries.findIndex(([key]) => key === "status") + 1;
           assignments.push(
             `first_response_at = CASE
-               WHEN $${entries.findIndex(([key]) => key === "status") + 1} IN ('ACKNOWLEDGED', 'IN_PROGRESS')
+               WHEN $${statusIndex} IN ('ACKNOWLEDGED', 'IN_PROGRESS')
                THEN COALESCE(first_response_at, CURRENT_TIMESTAMP)
                ELSE first_response_at END`,
             `resolved_at = CASE
-               WHEN $${entries.findIndex(([key]) => key === "status") + 1} IN ('RESOLVED', 'CLOSED')
+               WHEN $${statusIndex} IN ('RESOLVED', 'CLOSED')
                THEN COALESCE(resolved_at, CURRENT_TIMESTAMP)
                ELSE NULL END`,
+          );
+        }
+        if (resource === "alerts" && data.status) {
+          const statusIndex = entries.findIndex(([key]) => key === "status") + 1;
+          assignments.push(
+            `acknowledged_at = CASE
+               WHEN $${statusIndex} = 'ACKNOWLEDGED'
+               THEN COALESCE(acknowledged_at, CURRENT_TIMESTAMP)
+               ELSE acknowledged_at END`,
+            `resolved_at = CASE
+               WHEN $${statusIndex} = 'RESOLVED'
+               THEN COALESCE(resolved_at, CURRENT_TIMESTAMP)
+               ELSE NULL END`,
+          );
+        }
+        if (resource === "knowledge" && data.status) {
+          const statusIndex = entries.findIndex(([key]) => key === "status") + 1;
+          assignments.push(
+            `published_at = CASE
+               WHEN $${statusIndex} = 'PUBLISHED'
+               THEN COALESCE(published_at, CURRENT_TIMESTAMP)
+               ELSE published_at END`,
+          );
+        }
+        if (resource === "invoices" && data.status) {
+          const statusIndex = entries.findIndex(([key]) => key === "status") + 1;
+          assignments.push(
+            `paid_at = CASE
+               WHEN $${statusIndex} = 'PAID'
+               THEN COALESCE(paid_at, CURRENT_TIMESTAMP)
+               ELSE paid_at END`,
           );
         }
         values.push(id, expectedVersion);
@@ -536,7 +1171,7 @@ export function createPortalRepository(database) {
           action: `${resource}.update`,
           resource,
           resourceId: id,
-          tenantId: row.tenantId,
+          tenantId: row.tenantId ?? row.id,
           metadata: { fields: entries.map(([key]) => key), previousVersion: expectedVersion },
         });
         return row;

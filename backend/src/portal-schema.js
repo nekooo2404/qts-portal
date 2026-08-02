@@ -221,7 +221,7 @@ export function parseCreateTenant(input) {
     emergencyContactEmail: email(value.emergencyContactEmail, "Email khẩn cấp", { optional: true }),
     emergencyContactPhone: text(value.emergencyContactPhone, "Số điện thoại khẩn cấp", { max: 40, optional: true }),
     notes: text(value.notes, "Ghi chú", { max: 5000, optional: true }),
-    slaCriticalMinutes: positiveInteger(value.slaCriticalMinutes, "SLA Critical", { maximum: 525_600 }),
+    slaCriticalMinutes: value.slaCriticalMinutes === undefined ? undefined : positiveInteger(value.slaCriticalMinutes, "SLA Critical", { maximum: 525_600 }),
     slaHighMinutes: value.slaHighMinutes === undefined ? undefined : positiveInteger(value.slaHighMinutes, "SLA High", { maximum: 525_600 }),
     slaMediumMinutes: value.slaMediumMinutes === undefined ? undefined : positiveInteger(value.slaMediumMinutes, "SLA Medium", { maximum: 525_600 }),
     slaLowMinutes: value.slaLowMinutes === undefined ? undefined : positiveInteger(value.slaLowMinutes, "SLA Low", { maximum: 525_600 }),
@@ -484,8 +484,23 @@ export function parseInvitation(input) {
     tenantId: tenantId(value.tenantId, { optional: true }),
     email: email(value.email),
     role: oneOf(value.role, "Role", ["client_admin", "client_viewer", "billing", "technical"]),
-    expiresAt: isoDateTime(value.expiresAt, "Thời hạn lời mời", { optional: true }),
+    expiresAt: isoDateTime(value.expiresAt, "Thời hạn lời mời"),
   });
+}
+
+export function parseMemberPatch(input) {
+  const value = record(input);
+  assertKnownKeys(value, ["role", "status", "expectedVersion"]);
+  const parsed = removeUndefined({
+    role: oneOf(value.role, "Role", [
+      "client_admin", "client_viewer", "billing", "technical",
+      "soc_l1", "soc_l2", "soc_l3", "account_manager", "qts_admin",
+    ], { optional: true }),
+    status: oneOf(value.status, "Trạng thái", ["ACTIVE", "DISABLED"], { optional: true }),
+    expectedVersion: positiveInteger(value.expectedVersion, "expectedVersion"),
+  });
+  if (Object.keys(parsed).length === 1) validationFail("Cần ít nhất một trường để cập nhật thành viên.");
+  return parsed;
 }
 
 export function parseCreateShift(input) {

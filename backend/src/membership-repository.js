@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isIP } from "node:net";
 
 import { withDatabaseScope } from "./database.js";
 
@@ -152,9 +153,9 @@ export function createMembershipRepository(database) {
       });
     },
 
-    async createInvitation({ tenantId, email, role, actor, expiresAt }) {
+    async createInvitation({ tenantId, email, role, actor, context, expiresAt, scope }) {
       const id = randomUUID();
-      return withDatabaseScope(database, INTERNAL_SCOPE, async (client) => {
+      return withDatabaseScope(database, scope, async (client) => {
         const result = await client.query(
           `INSERT INTO invitations (
              id, tenant_id, email, role, expires_at,
@@ -169,6 +170,24 @@ export function createMembershipRepository(database) {
             expiresAt,
             actor.identity.issuer,
             actor.identity.subject,
+          ],
+        );
+        const address = context?.ipAddress;
+        await client.query(
+          `INSERT INTO audit_events (
+             tenant_id, actor_issuer, actor_subject, actor_role, action,
+             resource_type, resource_id, outcome, request_id, ip_address, metadata
+           ) VALUES ($1, $2, $3, $4, 'members.invite', 'invitations', $5,
+                     'SUCCESS', $6, $7, $8::jsonb)`,
+          [
+            tenantId,
+            actor.identity.issuer,
+            actor.identity.subject,
+            actor.authorization.role,
+            id,
+            context?.requestId ?? null,
+            typeof address === "string" && isIP(address) ? address : null,
+            JSON.stringify({ role }),
           ],
         );
         return result.rows[0];

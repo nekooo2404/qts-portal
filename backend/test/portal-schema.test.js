@@ -215,9 +215,15 @@ test("knowledge, invitation, shift và comment được validate ở biên", () 
     tenantId: "acme-vn",
     email: "security@acme.vn",
     role: "technical",
+    expiresAt: "2026-08-10T08:00:00.000Z",
   }).email, "security@acme.vn");
   assert.throws(
-    () => parseInvitation({ tenantId: "acme-vn", email: "x@acme.vn", role: "qts_admin" }),
+    () => parseInvitation({
+      tenantId: "acme-vn",
+      email: "x@acme.vn",
+      role: "qts_admin",
+      expiresAt: "2026-08-10T08:00:00.000Z",
+    }),
     (error) => error.code === "VALIDATION_ERROR",
   );
 
