@@ -153,20 +153,21 @@ export function createMembershipRepository(database) {
       });
     },
 
-    async createInvitation({ tenantId, email, role, actor, context, expiresAt, scope }) {
+    async createInvitation({ tenantId, email, role, workspace, actor, context, expiresAt, scope }) {
       const id = randomUUID();
       return withDatabaseScope(database, scope, async (client) => {
         const result = await client.query(
           `INSERT INTO invitations (
-             id, tenant_id, email, role, expires_at,
+             id, tenant_id, email, role, workspace, expires_at,
              created_by_issuer, created_by_subject
-           ) VALUES ($1, $2, lower($3), $4, $5, $6, $7)
+           ) VALUES ($1, $2, lower($3), $4, $5, $6, $7, $8)
            RETURNING id, tenant_id, email, role, workspace, status, expires_at, created_at`,
           [
             id,
             tenantId,
             email,
             role,
+            workspace,
             expiresAt,
             actor.identity.issuer,
             actor.identity.subject,
@@ -187,7 +188,7 @@ export function createMembershipRepository(database) {
             id,
             context?.requestId ?? null,
             typeof address === "string" && isIP(address) ? address : null,
-            JSON.stringify({ role }),
+            JSON.stringify({ role, workspace }),
           ],
         );
         return result.rows[0];

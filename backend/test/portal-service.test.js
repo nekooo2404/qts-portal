@@ -135,3 +135,32 @@ test("client không được thay đổi workflow ticket", async () => {
     (error) => error.code === "PERMISSION_DENIED",
   );
 });
+
+test("qts_admin có thể mời role nội bộ nhưng client_admin không thể", async () => {
+  const invitations = [];
+  const membershipRepository = {
+    async createInvitation(input) {
+      invitations.push(input);
+      return { id: "invite-001" };
+    },
+  };
+  const service = createPortalService({
+    membershipRepository,
+    now: () => Date.parse("2026-08-03T08:00:00.000Z"),
+    repository: createRepository(),
+  });
+  const input = {
+    tenantId: "qts-vn",
+    email: "soc@qts.com.vn",
+    role: "soc_l2",
+    expiresAt: "2026-08-10T08:00:00.000Z",
+  };
+
+  await service.createInvitation({ actor: QTS_ADMIN, input });
+  assert.equal(invitations[0].workspace, "internal");
+
+  await assert.rejects(
+    () => service.createInvitation({ actor: CLIENT, input: { ...input, tenantId: "tenant-a" } }),
+    (error) => error.code === "PERMISSION_DENIED",
+  );
+});

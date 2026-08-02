@@ -400,6 +400,12 @@ export function createPortalService({ repository, membershipRepository, now = Da
         portalFail(503, "MEMBERSHIP_STORE_UNAVAILABLE", "Kho thành viên chưa sẵn sàng.");
       }
       const data = parseInvitation(input);
+      if (
+        actor.authorization.workspace === "client" &&
+        !canManageClientRole(data.role)
+      ) {
+        portalFail(403, "PERMISSION_DENIED", "Client admin chỉ được cấp role khách hàng.");
+      }
       const scope = concreteScope(actor, data.tenantId);
       const expiresAt = Date.parse(data.expiresAt);
       const currentTime = now();
@@ -414,6 +420,7 @@ export function createPortalService({ repository, membershipRepository, now = Da
         role: data.role,
         scope,
         tenantId: scope.tenantId,
+        workspace: workspaceForRole(data.role),
       });
     },
 

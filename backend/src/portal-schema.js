@@ -483,7 +483,10 @@ export function parseInvitation(input) {
   return removeUndefined({
     tenantId: tenantId(value.tenantId, { optional: true }),
     email: email(value.email),
-    role: oneOf(value.role, "Role", ["client_admin", "client_viewer", "billing", "technical"]),
+    role: oneOf(value.role, "Role", [
+      "client_admin", "client_viewer", "billing", "technical",
+      "soc_l1", "soc_l2", "soc_l3", "account_manager", "qts_admin",
+    ]),
     expiresAt: isoDateTime(value.expiresAt, "Thời hạn lời mời"),
   });
 }
