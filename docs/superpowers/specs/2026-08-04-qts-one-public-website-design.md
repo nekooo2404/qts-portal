@@ -83,7 +83,7 @@ Nêu rõ để không bị bất ngờ khi thực thi:
 
 - **`App.test.tsx` phải viết lại.** 17 test hiện tại điều khiển routing bằng `window.history.replaceState` rồi render một `<App/>`. Dưới Next, routing thuộc framework nên test phải render page component trực tiếp và mock `next/navigation`.
 - **Router `useSyncExternalStore` bị bỏ**, thay bằng `next/link` + `useRouter`. `document.title` thủ công thay bằng metadata API.
-- **Version Next chưa pin.** Sẽ chọn stable mới nhất tương thích React 19.2 và Node `^20.19.0 || >=22.12.0` tại thời điểm install, verify ngay ở task A0.1. Nếu không tương thích, fallback là bản stable trước đó — không hạ cấp React.
+- **Version Next và Tailwind đã pin.** Next **16.2.12** (peer dep `react: "^18.2.0 || 19.0.0-rc-de68d2f4-20241204 || ^19.0.0"`, engines `node: ">=20.9.0"`) và Tailwind **4.3.3** + `@tailwindcss/postcss` 4.3.3. Cả hai tương thích React 19.2.8 và Node `^20.19.0 || >=22.12.0` của repo — đã verify trước khi lập plan.
 
 ## 3. Information architecture
 
@@ -308,11 +308,40 @@ Sửa bằng cách thêm script chạy trực tiếp trong workspace, không qua
 - `.gitignore`: thêm `out/` và `.next/`.
 - `productionBrowserSourceMaps: false` khai báo tường minh trong `next.config.ts`, để `QTS_WORKSPACE_SPEC.md` §10 ("production không ship sourcemap") không bị vi phạm do quên.
 
+### 8.6 Hợp đồng deploy static: ba thứ phải sửa
+
+Audit trước khi lập plan phát hiện ba thứ trong `frontend/public/` sẽ vỡ khi chuyển từ SPA một file sang static export nhiều trang. Không phát hiện ở §2.1 vì §2.1 chỉ xét trust boundary, không xét file deploy.
+
+**1. `public/_redirects` phải bị xóa.** Nội dung hiện tại:
+
+```
+/* /index.html 200
+```
+
+Đây là catch-all của SPA. Với static export nhiều trang, nó phục vụ homepage cho **mọi** route — `/dich-vu` cũng trả về nội dung `/`. Thay bằng `trailingSlash: true` trong `next.config.ts`: Next sinh `out/dich-vu/index.html`, mà nginx và mọi static host phục vụ sẵn theo cơ chế index file. Không cần rewrite rule.
+
+Điều này **loại bỏ rủi ro §12.3** — pretty URL không còn cần cấu hình hạ tầng.
+
+**2. CSP `script-src 'self'` sẽ chặn hydration.** `public/_headers` hiện đặt `script-src 'self'` không có `'unsafe-inline'`. Next App Router chèn inline `<script>self.__next_f.push(...)</script>` vào mỗi trang static export để mang RSC payload. CSP hiện tại chặn script đó và trang không hydrate.
+
+Hướng xử lý người dùng đã chọn: **thử strict trước, chỉ hạ khi chứng minh được là không thể**. A0.1 có gate bắt buộc:
+
+- Thử `experimental.sri: { algorithm: 'sha256' }` trong `next.config.ts` cùng `script-src 'self' 'strict-dynamic'` trong `_headers`.
+- Build `out/`, serve kèm đúng header production, mở DevTools Console.
+- **0 CSP violation** → giữ strict.
+- **Có violation** → hạ xuống `'unsafe-inline'`, và ghi lý do vào `frontend/README.md` cùng §11 của spec này. Không hạ trước khi thử.
+
+Đây là website của một công ty an ninh, nên CSP cuối cùng phải là kết quả đã kiểm chứng, không phải mặc định copy từ docs.
+
+**3. `style-src` đã có `'unsafe-inline'` gián tiếp.** `_headers` hiện có `style-src-attr 'unsafe-inline'`, cho phép `style=""` attribute. `next/font` sinh `<style>` inline trong `<head>`, thuộc `style-src` chứ không phải `style-src-attr`. Gate ở điểm 2 phải kiểm cả directive này.
+
+**4. `src/vite-env.d.ts` bị thay bằng `next-env.d.ts`.** `.gitignore` đã có `out/`; chỉ thiếu `.next/`.
+
 ## 9. Thứ tự thực thi
 
 | Task | Nội dung | Gate |
 | --- | --- | --- |
-| **A0.1** | Install Next (pin version), `next.config.ts` với `output: 'export'`, reconfig tsconfig/eslint/vitest, `app/layout.tsx` + `globals.css` với token bridge | typecheck + build xanh |
+| **A0.1** | Install Next 16.2.12 + Tailwind 4.3.3, `next.config.ts` với `output: 'export'` + `trailingSlash: true`, xóa `public/_redirects`, reconfig tsconfig/eslint/vitest, `app/layout.tsx` + `globals.css` với token bridge, **gate CSP §8.6** | typecheck + build xanh; 0 CSP violation hoặc đã ghi lý do hạ |
 | **A0.2** | Port `/company` sang `app/page.tsx` **giữ nguyên visual 1:1**, chuyển 7 component sang `next/link`, viết lại test theo §8.1 | cả bốn gate xanh |
 | **A0.3** | Rename `/client` → `/portal`, port `/login` + `/portal/*` + `/admin/*` sang `app/` dạng `'use client'`, **giữ nguyên UI** | cả bốn gate xanh; `git diff` không chứa thay đổi logic auth |
 | **A1** | Token QTS mới (§4), homepage 15 section (§5) | cả bốn gate, kiểm 320/375/414/768px |
@@ -351,9 +380,11 @@ Theo brief §21, áp dụng cho A và ràng buộc trước cho B/C/D:
 
 ## 12. Rủi ro chưa loại bỏ được
 
-1. **Version Next chưa pin.** Chọn stable mới nhất tương thích React 19.2 tại thời điểm install, verify ở A0.1. Nếu không tương thích, fallback bản stable trước đó; không hạ cấp React.
-2. **`portal.css` cùng tồn tại với Tailwind preflight.** Preflight có thể đụng base style trong `styles.css`. Giảm thiểu bằng thứ tự import ở §2.4, và A0.2 phải so sánh visual trước/sau.
-3. **Static export cần rewrite rule cho pretty URL** (`/dich-vu` → `/dich-vu.html`) ở tầng reverse proxy. Đây là cấu hình hạ tầng: spec ghi vào `frontend/README.md`, không tự sửa hạ tầng của người dùng.
+1. **Version Next và Tailwind đã pin, rủi ro này đã đóng.** Next 16.2.12 + Tailwind 4.3.3 đã verify peer dep và engines (xem §2.5). Giữ mục này để ghi nhận rủi ro đã được xử lý, không phải rủi ro còn mở.
+2. **`portal.css` cùng tồn tại với Tailwind preflight.** Preflight có thể đụng base style trong `styles.css` (`box-sizing`, `overflow-x: clip`, `img/svg display: block`, `button font: inherit`). Giảm thiểu bằng thứ tự import ở §2.4, và A0.2 phải so sánh visual trước/sau ở cả marketing và portal.
+3. **CSP có thể phải hạ xuống `'unsafe-inline'`.** Xem §8.6 điểm 2. Chỉ hạ sau khi `experimental.sri` + `'strict-dynamic'` được chứng minh là không đủ, và phải ghi lý do.
+
+Rủi ro "static export cần rewrite rule cho pretty URL" đã được loại bỏ bằng `trailingSlash: true` (§8.6 điểm 1).
 
 ## 13. Ngoài phạm vi A
 
