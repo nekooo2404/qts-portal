@@ -1,170 +1,131 @@
-# Kế hoạch triển khai QTS Workspace
+# Kế hoạch hoàn thiện và go-live QTS Portal
 
-## 1. Mục tiêu kế hoạch
+## 1. Baseline đã hoàn tất
 
-Phát triển QTS Portal từ baseline không có dữ liệu vận hành thành hệ thống production theo từng lát dọc có thể kiểm chứng. Không mở giao diện nghiệp vụ trước khi IAM, tenant isolation và API tương ứng sẵn sàng.
+| Lát triển khai | Kết quả |
+| --- | --- |
+| Tách frontend/backend | Hai npm workspace, build/test độc lập, cùng một lockfile |
+| Loại dummy data | Không còn user/tenant/telemetry/record dựng sẵn hoặc fallback local |
+| Google OIDC | Backend code flow, state, nonce, PKCE, claim validation, Workspace `hd` |
+| IAM bền vững | PostgreSQL transaction/session, membership, invitation, revoke khi đổi quyền |
+| Data foundation | Migration, domain tables, RLS, audit append-only, encryption key |
+| API domain | Dashboard, tenant, alert, ticket, asset, license, billing, document, knowledge, integration, shift, member, audit |
+| Client Portal | Đã nối API thật cho toàn bộ route client |
+| Internal Portal | Đã nối API thật và tenant selector cho toàn bộ route internal |
+| Responsive UX | Desktop/mobile, empty/loading/error/denied states, no-overflow 320 px |
+| Tài liệu | README setup/runbook, workspace spec, OpenAPI và ADR |
 
-## 2. Trạng thái hiện tại
+## 2. Cổng chất lượng ứng dụng
 
-| Hạng mục | Trạng thái | Kết quả |
-| --- | --- | --- |
-| Tách frontend/backend | Hoàn tất | Hai npm workspace, lệnh chạy và build độc lập |
-| Website công ty | Hoàn tất | Hoạt động tại `/company` |
-| Backend hạ tầng | Hoàn tất | Health, readiness, OpenAPI, timeout và graceful shutdown |
-| Loại bỏ dữ liệu cục bộ | Hoàn tất | Không còn record nghiệp vụ, tài khoản, phiên hoặc mutation trong frontend |
-| Google OIDC foundation | Hoàn tất | Backend code flow, PKCE, claim validation, session cookie và RBAC gateway |
-| IAM production HA | Đang triển khai | Còn shared store, durable audit, revoke, recovery và kiểm chứng MFA policy |
-| API nghiệp vụ | Chưa triển khai | Cần domain contract, database và policy tenant |
-| Client Portal | Chưa triển khai | Chỉ bắt đầu sau IAM và API domain đầu tiên |
-| Internal Portal | Chưa triển khai | Chỉ bắt đầu sau IAM, quyền nội bộ và audit |
-
-## 3. Nguyên tắc thực hiện
-
-1. Backend contract và policy có trước giao diện sử dụng dữ liệu.
-2. Mỗi lát dọc phải có authentication, authorization, tenant isolation, audit và observability phù hợp.
-3. Không dùng dữ liệu cục bộ làm fallback khi API chưa sẵn sàng hoặc gặp lỗi.
-4. Mỗi endpoint có loading, empty, error và permission-denied state riêng.
-5. Mỗi checkpoint phải giữ `npm run check` đạt và có thể rollback độc lập.
-6. Chỉ tuyên bố chức năng hoạt động khi luồng browser gọi backend thật và dữ liệu được lưu đúng nguồn.
-
-## 4. Pha 0 - Baseline sạch
-
-### Công việc đã hoàn tất
-
-- Xóa module record nghiệp vụ và type chỉ phục vụ dữ liệu cục bộ.
-- Xóa tài khoản/persona, credential, MFA, SSO và session cục bộ.
-- Xóa ticket/incident/audit mutation trong bộ nhớ.
-- Xóa dashboard, bảng, biểu đồ và dependency trực quan hóa không còn nguồn dữ liệu.
-- Giữ `/client/*` và `/admin/*` ở trạng thái khóa rõ ràng.
-- Bổ sung test ngăn hồi quy: không có form credential, bảng hoặc số liệu trên route khóa.
-- Cập nhật README, đặc tả và ADR.
-
-### Cổng chất lượng
+Mỗi thay đổi trước merge phải chạy:
 
 ```powershell
 npm run check
+npm run test:integration:env --workspace @qts/backend
 npm audit --audit-level=moderate
 ```
 
-## 5. Pha 1 - IAM và tenant foundation
+Với thay đổi UI/auth/domain flow phải bổ sung browser smoke test ở desktop và mobile, kiểm tra console/network và xác nhận không có dữ liệu giả.
 
-### Công việc
+## 3. Pha A - Hạ tầng staging
 
-1. Hoàn tất: chọn Google OIDC và ghi ADR cho Authorization Code Flow, session và logout.
-2. Hoàn tất ở auth gateway: membership theo `iss + sub`, tenant, role và workspace.
-3. Hoàn tất: session cookie phía backend; không đưa Google token vào browser storage.
-4. Hoàn tất ở route auth: cổng client/admin chỉ mở sau khi backend xác nhận workspace.
-5. Còn lại: shared session store, session revoke, recovery và correlation ID.
-6. Còn lại: authorization/tenant middleware cho từng API nghiệp vụ.
-7. Còn lại: audit append-only cho failure, role change, revoke và privileged access.
+1. Chọn managed PostgreSQL cùng vùng dữ liệu được QTS phê duyệt.
+2. Bật PostgreSQL TLS, private networking, HA, PITR và encrypted backup.
+3. Lưu Google secret, database credential và data encryption key trong secret manager/KMS.
+4. Deploy frontend static/CDN và backend container dưới cùng HTTPS origin.
+5. Cấu hình reverse proxy, HSTS, CSP, WAF/DDoS và rate limit.
+6. Thu thập metric, structured log và audit vào nền tảng quan sát tập trung.
+7. Chạy migration bằng release job có lock, credential owner riêng và kiểm soát rollback; runtime chỉ dùng role `qts_app` không đặc quyền.
 
-### Tiêu chí chấp nhận
+Tiêu chí ra khỏi pha:
 
-- Không có local bypass hoặc development credential trong bundle.
-- Test thành công/thất bại cho login, logout, expiry, revoke và MFA requirement.
-- Test chéo tenant và role trái quyền luôn bị backend từ chối.
-- Cookie và security header được kiểm tra trên HTTPS staging.
-- Runbook account disable và emergency access được diễn tập.
+- Restore backup thành công trong môi trường tách biệt.
+- Login, session cookie, CSRF và tenant isolation smoke test đạt trên HTTPS.
+- Không secret nào xuất hiện trong image, bundle, log hoặc repository.
+- Alert vận hành có owner và on-call route.
 
-Các tiêu chí revoke, MFA evidence, shared store và audit bền vững chưa đạt; vì vậy Pha 1 chưa được coi là production-complete.
+## 4. Pha B - Tích hợp nghiệp vụ bên ngoài
 
-## 6. Pha 2 - Nền tảng dữ liệu và audit
+### Security ingestion
 
-### Công việc
+- Định nghĩa service-to-service identity, scope và key rotation.
+- Thêm queue/backpressure, deduplication và dead-letter handling.
+- Xây connector SIEM/EDR/SOAR theo contract riêng.
+- Định nghĩa event freshness, ordering và replay semantics.
+- Capacity/load test theo lưu lượng log dự kiến.
 
-1. Chọn PostgreSQL topology, migration framework và backup policy.
-2. Tạo domain nền: tenant, user mapping, permission, asset reference và audit metadata.
-3. Định nghĩa OpenAPI, validation, pagination và error taxonomy.
-4. Bổ sung structured logging, metric, tracing và alert.
-5. Thiết lập secret manager, KMS và policy truy cập dữ liệu.
+### Billing/CRM
 
-### Tiêu chí chấp nhận
+- Xác định hệ thống nguồn cho contract/invoice/payment status.
+- Thêm webhook signature, reconciliation và idempotency.
+- Thiết kế approval/dual control cho mutation tài chính.
+- Không để portal trở thành nguồn thanh toán nếu chưa được phê duyệt.
 
-- Migration tiến/lùi được kiểm thử.
-- Backup/restore đạt RPO/RTO đã phê duyệt.
-- API không tin tenant/role do client gửi lên.
-- Log không chứa credential, token, secret hoặc payload nhạy cảm ngoài chính sách.
-- Truy vấn và index luôn mang tenant constraint bắt buộc.
+### Notification
 
-## 7. Pha 3 - Client Portal theo lát dọc
+- Tích hợp email provider qua queue.
+- Template lời mời không chứa credential/token nhạy cảm.
+- Theo dõi bounce/delivery và chống enumeration.
 
-Thứ tự đề xuất:
+Tiêu chí ra khỏi pha:
 
-1. Tài sản/dịch vụ và health summary.
-2. Ticket và SLA.
-3. Cảnh báo và threat dashboard.
-4. Tài liệu compliance/report.
-5. Hợp đồng, license và billing.
-6. Audit dành cho tenant.
+- Connector có authentication, audit, retry và runbook.
+- Không dùng session cookie người dùng cho machine ingestion.
+- Dữ liệu source-of-truth và ownership được ký duyệt.
 
-Mỗi lát dọc gồm OpenAPI, persistence, permission, UI, loading/empty/error state, audit, observability, test và runbook. Dashboard realtime chỉ triển khai sau khi ingestion contract và freshness semantics được duyệt.
+## 5. Pha C - File, key và audit hardening
 
-### Tiêu chí chấp nhận
+1. Chuyển document binary sang object storage private.
+2. Thêm antivirus/CDR, DLP, signed download ngắn hạn và retention.
+3. Xây job re-encrypt để xoay `QTS_DATA_ENCRYPTION_KEY` không mất secret.
+4. Đẩy audit sang archive bất biến/WORM và SIEM.
+5. Định nghĩa retention/purge hợp pháp cho từng domain, trừ audit bắt buộc giữ.
+6. Thêm step-up authentication/dual control cho thao tác đặc quyền cao.
 
-- Khách hàng chỉ thấy dữ liệu thuộc tenant và entitlement của họ.
-- Empty state không tạo số liệu thay thế.
-- Ticket mutation có idempotency, audit và SLA clock phía server.
-- File/report dùng access check và signed URL ngắn hạn.
-- Billing action có approval và đối soát theo quy trình chính thức.
+Tiêu chí ra khỏi pha:
 
-## 8. Pha 4 - Internal Portal theo lát dọc
+- Key rotation và restore file được diễn tập.
+- Malware test file bị chặn và có alert.
+- Audit có thể truy nguyên actor/request/resource giữa portal và SIEM.
 
-Thứ tự đề xuất:
+## 6. Pha D - Security assurance và go-live
 
-1. Danh sách tenant và SOC queue theo quyền.
-2. Incident dispatch, escalation và shift handover.
-3. Hồ sơ khách hàng và liên hệ khẩn cấp.
-4. Integration inventory và health.
-5. Thay đổi cấu hình có approval.
-6. Audit và forensic export.
+1. Secret scan, SAST, SCA, IaC scan trong CI.
+2. DAST staging và dependency/container policy gate.
+3. Load/capacity/soak test API, database và ingestion.
+4. Accessibility regression và browser matrix.
+5. Pentest độc lập theo OWASP ASVS/Top 10 và retest finding.
+6. Disaster recovery, rollback, account compromise và incident-response drill.
+7. Privacy/data residency/retention review.
+8. Runbook và ownership sign-off bởi SOC, Engineering, IT, Finance và Security.
 
-### Tiêu chí chấp nhận
+Go-live chỉ khi:
 
-- Quyền đa tenant là explicit grant, không suy ra từ UI.
-- Thao tác đặc quyền yêu cầu step-up authentication hoặc dual control theo risk policy.
-- Incident update có optimistic concurrency/idempotency và immutable audit.
-- Secret chỉ tồn tại trong vault; UI không nhận lại secret đầy đủ.
-- Ca trực, escalation và cảnh báo được kiểm thử với quy trình SOC thực tế.
+- Không còn Critical/High finding chưa xử lý hoặc chưa có risk acceptance chính thức.
+- RPO/RTO, SLO, capacity và retention được phê duyệt.
+- Backup restore, rollback, key rotation, account disable và emergency access đã diễn tập.
+- WAF, alert, on-call, dashboard vận hành và escalation hoạt động.
+- Google Workspace MFA policy đã được xác minh ở cấp tổ chức.
 
-## 9. Pha 5 - Hardening và go-live
+## 7. Rủi ro đang mở
 
-### Công việc
-
-- WAF/DDoS protection, rate limit và network segmentation.
-- TLS, CSP, HSTS, key rotation và dependency governance.
-- Secret scan, SAST, SCA, IaC scan và DAST trong CI/CD.
-- Load/capacity test cho API và telemetry ingestion.
-- Penetration test độc lập, xử lý finding và retest.
-- Disaster recovery, backup restore và incident response drill.
-- Dashboard vận hành, alert ownership và on-call runbook.
-- Canary/blue-green deployment và rollback đã diễn tập.
-
-### Cổng go-live
-
-- Không còn finding critical/high chưa được chấp nhận bằng quy trình risk chính thức.
-- RTO/RPO, capacity, retention và data residency được QTS phê duyệt.
-- Audit, alert, backup, restore, rollback và emergency access đã được diễn tập.
-- Tài liệu vận hành và ownership có người chịu trách nhiệm cụ thể.
-
-## 10. Rủi ro và kiểm soát
-
-| Rủi ro | Mức độ | Kiểm soát |
+| Rủi ro | Mức độ | Kiểm soát tạm thời |
 | --- | --- | --- |
-| Giao diện bị hiểu là chức năng đã hoạt động | Cao | Route khóa và tài liệu trạng thái rõ ràng |
-| Frontend guard bị coi là authorization | Cao | Enforce ở API và tầng truy vấn; test trái quyền |
-| Rò rỉ chéo tenant | Rất cao | Tenant context từ session, policy bắt buộc, security test |
-| API mất kết nối nhưng UI hiện số liệu cũ/cục bộ | Cao | Không có fallback; hiển thị unavailable/error |
-| Secret lọt vào bundle hoặc log | Rất cao | Secret manager, scan CI, log redaction |
-| Telemetry quá tải | Cao | Backpressure, queue, rate limit, capacity test |
-| Route SPA lỗi khi refresh | Trung bình | Static fallback/reverse proxy và smoke test sau deploy |
+| Integration mới chỉ là inventory | Cao | Không quảng bá là đã ingest; nhập record qua quy trình kiểm soát |
+| Document chưa quét malware | Rất cao | Chỉ user đặc quyền upload, giới hạn loại/kích thước; chưa mở production |
+| Encryption key chưa có rotation job | Cao | Giữ khóa trong secret manager, backup và change control nghiêm ngặt |
+| Audit cùng database | Cao | Hạn chế DB privilege; ưu tiên WORM export trước go-live |
+| Billing chưa đối soát tự động | Cao | Hệ thống tài chính chính thức vẫn là source-of-truth |
+| Invitation chưa gửi email tự động | Trung bình | Thông báo qua kênh QTS đã xác minh |
+| Dashboard polling 30 giây | Trung bình | Hiển thị generated time; chưa cam kết realtime SLO |
 
-## 11. Definition of done cho mỗi lát dọc
+## 8. Definition of done cho lát mới
 
-- Contract và threat model được review.
-- Authentication, authorization và tenant isolation có test.
-- Không có dữ liệu cục bộ thay cho backend.
-- UI có đầy đủ loading, empty, error, denied và unavailable state.
-- Audit và observability đủ để điều tra vận hành.
-- Unit, integration, browser, typecheck, lint, build và audit dependency đạt.
-- Security review và tài liệu runbook hoàn tất.
-- Rollback được xác định và kiểm thử ở môi trường phù hợp.
+- Contract/threat model được review.
+- Authentication, authorization, tenant isolation và audit có test.
+- Không có dummy/fallback data.
+- UI có loading, empty, error, denied và responsive state.
+- Observability đủ chẩn đoán mà không log secret/token.
+- Unit, integration, browser, typecheck, lint, build và dependency audit đạt.
+- Migration có backup/rollback plan.
+- Runbook, ownership và giới hạn được cập nhật trước khi merge.

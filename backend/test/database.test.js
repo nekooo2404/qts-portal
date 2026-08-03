@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { readDatabaseConfig } from "../src/database.js";
+import {
+  assertRuntimeDatabaseRole,
+  readDatabaseConfig,
+  readMigrationDatabaseConfig,
+} from "../src/database.js";
 import { createSecretCipher } from "../src/secret-crypto.js";
 
 test("database config bắt buộc PostgreSQL URL và giới hạn pool", () => {
@@ -37,6 +41,43 @@ test("production bắt buộc TLS tới PostgreSQL", () => {
       QTS_DATABASE_SSL: "false",
     }),
     /must be true in production/,
+  );
+});
+
+test("migration URL tách biệt khỏi runtime URL khi được cấu hình", () => {
+  const config = readMigrationDatabaseConfig({
+    NODE_ENV: "development",
+    QTS_DATABASE_URL: "postgresql://qts_app:runtime@db.example/qts_portal",
+    QTS_MIGRATION_DATABASE_URL: "postgresql://qts_owner:migrate@db.example/qts_portal",
+    QTS_DATABASE_SSL: "false",
+  });
+  assert.equal(config.connectionString.includes("qts_owner"), true);
+  assert.equal(readMigrationDatabaseConfig({}), undefined);
+});
+
+test("production từ chối runtime role có thể bypass RLS", async () => {
+  const unsafePool = {
+    async query() {
+      return {
+        rows: [{ role_name: "qts", rolsuper: true, rolbypassrls: true }],
+      };
+    },
+  };
+  await assert.rejects(
+    () => assertRuntimeDatabaseRole(unsafePool, { requireDedicated: true }),
+    /qts_app role without SUPERUSER or BYPASSRLS/,
+  );
+
+  const safePool = {
+    async query() {
+      return {
+        rows: [{ role_name: "qts_app", rolsuper: false, rolbypassrls: false }],
+      };
+    },
+  };
+  assert.equal(
+    (await assertRuntimeDatabaseRole(safePool, { requireDedicated: true })).role_name,
+    "qts_app",
   );
 });
 

@@ -1,78 +1,71 @@
 # QTS Portal Frontend
 
-Frontend React/Vite hiển thị website QTS, cổng Google OIDC và trạng thái truy cập Client/Internal Portal. Frontend không xử lý authorization code, không nhận Google token và không lưu session trong Web Storage.
+Frontend React/Vite cung cấp website QTS, cổng Google OIDC và hai workspace Client/Internal. Mọi số liệu nghiệp vụ được tải từ backend thật; frontend không có seed/fallback operational data.
 
-## Phạm vi
+Hướng dẫn setup và vận hành đầy đủ nằm tại [README gốc](../README.md).
 
-| Chức năng | Trạng thái |
-| --- | --- |
-| Website công ty | Hoạt động tại `/company` |
-| Auth status | Đọc từ `/api/v1/auth/status` |
-| Google login | Điều hướng browser tới endpoint backend |
-| Session | Đọc từ `/api/v1/auth/session` bằng cookie cùng origin |
-| Client route guard | Kiểm tra `workspace=client` để điều chỉnh UX |
-| Internal route guard | Kiểm tra `workspace=internal` để điều chỉnh UX |
-| Logout | POST CSRF token do backend cấp |
-| Dữ liệu nghiệp vụ | Không có dữ liệu cục bộ hoặc fallback giả |
+## Trách nhiệm
 
-Route guard frontend không phải ranh giới bảo mật. Mọi API nghiệp vụ tương lai vẫn phải xác thực session, tenant và permission ở backend.
+- Hiển thị auth state: loading, unconfigured, anonymous, authenticated, forbidden và unavailable.
+- Điều hướng browser tới backend để bắt đầu Google login; không xử lý authorization code.
+- Đọc session bằng cookie cùng origin; không lưu token/session trong Web Storage.
+- Render menu theo workspace/role để tối ưu UX.
+- Gọi portal API với CSRF token cho mutation.
+- Hiển thị loading, empty, error và permission-denied riêng biệt.
+- Không tự tạo KPI, alert, ticket, asset hoặc record thay thế khi API lỗi/rỗng.
 
-## Cấu trúc auth
+Frontend guard không phải ranh giới bảo mật. Backend vẫn xác thực session, permission và tenant trên từng request.
+
+## Cấu trúc
 
 ```text
-src/auth/
-|-- AuthContext.tsx  # Tải auth status/session và thực hiện logout
-|-- auth-context.ts  # Context và useAuth hook
-`-- types.ts         # Session, workspace và role contract
+frontend/src/
+|-- auth/                    # AuthContext, hook và contract
+|-- components/portal/       # Shell, navigation link, status, feedback
+|-- pages/portal/            # Dashboard và từng module nghiệp vụ
+|-- portal/                  # API client, permission, config và hooks
+|-- App.tsx                  # Route/auth gateway
+|-- portal.css               # Portal workspace responsive styles
+`-- styles.css               # Website/auth global styles
 ```
 
-`AuthProvider` có năm trạng thái rõ ràng:
+## Route
 
-- `loading`: đang kiểm tra backend.
-- `unconfigured`: Google OIDC chưa được cấu hình.
-- `anonymous`: OIDC sẵn sàng nhưng chưa có session.
-- `authenticated`: có session QTS hợp lệ.
-- `error`: không xác minh được; giao diện fail closed.
+| Nhóm | Route |
+| --- | --- |
+| Public | `/`, `/company` |
+| Client | `/client/overview`, alerts, tickets, assets, licenses, contracts, invoices, documents, knowledge, team, audit |
+| Internal | `/admin/soc`, alerts, tickets, customers, assets, licenses, contracts, invoices, documents, knowledge, integrations, team, shifts, audit |
+
+Route sai workspace hiển thị forbidden. Route không có trong navigation của role hiển thị access denied; API backend vẫn là kiểm soát cuối cùng.
 
 ## Chạy frontend
-
-Từ thư mục gốc:
 
 ```powershell
 npm ci
 npm run dev:frontend
 ```
 
-Mở `http://localhost:5173/` khi callback Google được cấu hình với origin này.
+Mở `http://localhost:5173`. Vite proxy `/api/*` tới `http://127.0.0.1:8080`.
 
-Vite proxy `/api/*` tới `http://127.0.0.1:8080`. Đổi backend origin:
+Đổi backend dev origin nếu cần:
 
 ```powershell
 $env:QTS_API_ORIGIN = "http://127.0.0.1:8081"
 npm run dev:frontend
 ```
 
-`QTS_API_ORIGIN` chỉ được đọc bởi Vite dev server. Không dùng biến `VITE_*` cho secret vì giá trị có thể được đưa vào browser bundle.
+`QTS_API_ORIGIN` chỉ được Vite dev server đọc. Không đặt secret trong `VITE_*` vì biến đó có thể bị đưa vào browser bundle.
 
-## Route
+## Dữ liệu và mutation
 
-| Route | Không cấu hình | Chưa đăng nhập | Đúng workspace | Sai workspace |
-| --- | --- | --- | --- | --- |
-| `/` | Nút bị khóa | Nút Google hoạt động | Link tới workspace | Link tới workspace |
-| `/client/*` | Unavailable | Yêu cầu login | Trạng thái Client đã xác thực | Forbidden |
-| `/admin/*` | Unavailable | Yêu cầu login | Trạng thái Internal đã xác thực | Forbidden |
-| `/company` | Website công khai | Website công khai | Website công khai | Website công khai |
-
-Không có bảng, KPI, alert, ticket, asset hoặc billing record được hiển thị cho đến khi có API thật.
-
-## Luồng browser
-
-1. Gọi status và session với `credentials: same-origin`.
-2. Nút login là navigation tới `/api/v1/auth/login/google`; không dùng AJAX để xử lý redirect.
-3. Sau callback, backend redirect về đúng workspace.
-4. Frontend render display name, tenant, role và workspace từ session response.
-5. Logout gửi `X-CSRF-Token`; cookie HttpOnly tự đi theo request và JavaScript không thể đọc.
-6. Response `401` đưa UI về trạng thái anonymous; lỗi khác đưa UI về fail-closed.
+- Dashboard tải `/api/v1/portal/overview` và tự làm mới 30 giây.
+- Resource list dùng server pagination/search; UI hiện lấy tối đa 100 bản ghi mỗi trang làm việc.
+- Ticket create sinh UUID làm `Idempotency-Key`.
+- Update gửi `expectedVersion` để phát hiện ghi đè đồng thời.
+- Document tối đa 10 MiB, định dạng PDF/TXT/Markdown, truyền Base64 tới backend.
+- Download dùng blob URL ngắn hạn và filename từ response.
+- Team invitation chỉ provisioning; UI không tuyên bố đã gửi email.
 
 ## Kiểm thử và build
 
@@ -83,33 +76,24 @@ npm run lint:frontend
 npm run build:frontend
 ```
 
-Test auth UI xác nhận:
+Test bao phủ auth gateway, workspace isolation, CSRF logout, dashboard response thật, empty state và ticket mutation có idempotency.
 
-- Không có field mật khẩu hoặc OTP cục bộ.
-- Nút Google chỉ hoạt động khi backend báo configured.
-- Client session không mở Internal Portal.
-- Tenant/role chỉ đến từ session response.
-- Logout gửi đúng CSRF token.
-- Không có bảng dữ liệu dựng sẵn ở workspace.
+## Production frontend
 
-## Production
-
-1. Build bằng `npm run build:frontend`.
+1. Chạy `npm run build:frontend`.
 2. Phục vụ `frontend/dist/` qua CDN/static host; không dùng `vite preview` làm production server.
-3. Rewrite route SPA về `index.html`.
+3. Rewrite SPA route về `index.html`.
 4. Reverse proxy `/api/*` tới backend dưới cùng public origin.
-5. Bắt buộc HTTPS và áp dụng security headers tương đương `public/_headers`.
-6. Cache asset có hash dài hạn; revalidate HTML entrypoint.
-7. Smoke test `/`, `/company`, `/client/overview`, `/admin/soc` trên desktop/mobile.
-8. Kiểm tra Console, Network, keyboard focus, reduced motion và text overflow.
+5. Bắt buộc HTTPS và security headers tương đương `public/_headers`.
+6. Cache asset có hash dài hạn; HTML entrypoint phải revalidate.
+7. Smoke test public/client/internal trên desktop và mobile.
 
-## Quy tắc dữ liệu và bảo mật
+## Quy tắc bắt buộc
 
-- Không thêm user, tenant, telemetry hoặc record nghiệp vụ vào source.
-- Không dùng localStorage/sessionStorage cho token hoặc session.
-- Không thêm form password/OTP thay thế Google OIDC.
-- Không tin role/tenant do route hoặc browser tự chọn.
-- Không fallback sang dữ liệu cục bộ khi API lỗi.
-- Không gửi `GOOGLE_CLIENT_SECRET` hay biến backend vào frontend.
+- Không thêm credential form hoặc local auth bypass.
+- Không dùng `localStorage`/`sessionStorage` cho token hay session.
+- Không tin tenant/role từ route hoặc form; backend phải quyết định.
+- Không fallback sang dữ liệu local/dummy khi API lỗi.
 - Không dùng `dangerouslySetInnerHTML` cho dữ liệu API.
-- Luôn có loading, anonymous, forbidden, empty và error state riêng khi mở domain nghiệp vụ.
+- Không gửi backend secret vào bundle.
+- Mọi module phải giữ đủ loading, empty, error và denied state.

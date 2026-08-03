@@ -1,184 +1,174 @@
-# Đặc tả QTS Workspace
+# Đặc tả QTS Operations Workspace
 
-## Trạng thái
+## 1. Mục tiêu
 
-Được cập nhật ngày 03/08/2026 sau khi bổ sung Google OpenID Connect và session phía backend. Tài liệu mô tả trạng thái repository hiện tại cùng các điều kiện còn thiếu trước khi phát triển portal nghiệp vụ.
+QTS Operations Portal cung cấp một nền tảng chung cho hai nhóm người dùng:
 
-## 1. Mục tiêu hệ thống
+- Khách hàng quản lý dịch vụ công nghệ/an ninh trong đúng tenant của họ.
+- Nhân viên QTS vận hành SOC, hỗ trợ và quản trị nhiều tenant theo role.
 
-QTS Portal hướng tới một nền tảng dùng chung IAM nhưng tách quyền rõ ràng cho hai phân hệ:
+Hệ thống phải ưu tiên tính đúng của dữ liệu, cô lập tenant, khả năng điều tra và tốc độ truy cập thông tin. Không được dùng dữ liệu giả để che việc API rỗng hoặc lỗi.
 
-1. **Client Portal**: khách hàng theo dõi dịch vụ, cảnh báo, ticket/SLA, tài sản, giấy phép, hợp đồng, hóa đơn, tài liệu tuân thủ và audit thuộc tenant của mình.
-2. **Internal Portal**: SOC, kỹ sư và account QTS giám sát đa tenant, điều phối sự cố, quản lý khách hàng, ca trực, tích hợp và audit liên quan đến phạm vi được cấp quyền.
+## 2. Phạm vi hiện tại
 
-Hai phân hệ nghiệp vụ chưa được kích hoạt. Repository cung cấp website công ty, Google OIDC, cổng RBAC, route bảo vệ và backend hạ tầng; chưa có dữ liệu/API SOC, ticket, asset hoặc billing.
+Đã có website công ty, Google OIDC, PostgreSQL persistence, Client Portal, Internal Portal và API cho:
 
-## 2. Nguyên tắc dữ liệu
+- Dashboard/security overview.
+- Tenant/customer và SLA policy.
+- Alert, ticket/comment, asset, license.
+- Contract, invoice, document, knowledge article.
+- Integration inventory và SOC shift.
+- Membership, invitation và audit.
 
-1. Không có record người dùng, tenant, cảnh báo, telemetry, ticket, sự cố, tài sản, license, billing, tài liệu hay audit event dựng sẵn trong runtime.
-2. Không có credential, OTP, Google token, API key, phiên đăng nhập hoặc persona dựng sẵn trong frontend.
-3. Frontend không sinh số liệu thay thế khi API thiếu, lỗi hoặc trả rỗng.
-4. Trạng thái loading, empty, error và unavailable phải được thể hiện trung thực.
-5. Nội dung giới thiệu công khai tại `/company` được xem là nội dung biên tập, không phải dữ liệu vận hành.
-6. Dữ liệu nghiệp vụ chỉ được hiển thị sau khi đi qua IAM, authorization phía server và tenant isolation.
+Chưa thuộc phạm vi hiện tại:
 
-## 3. Phạm vi đã triển khai
+- SIEM/EDR ingestion worker và service-to-service credential.
+- Payment gateway/ERP synchronization.
+- Email delivery service cho lời mời.
+- SAML provider.
+- Object storage, malware scanning và WORM audit archive.
 
-### 3.1. Frontend
+## 3. Bất biến hệ thống
 
-- React/Vite/TypeScript tách riêng trong `frontend/`.
-- Website công ty QTS tại `/company`.
-- Cổng truy cập tại `/` đọc trạng thái OIDC/session từ backend và không nhận credential.
-- `/client/*` yêu cầu session có workspace `client`.
-- `/admin/*` yêu cầu session có workspace `internal`.
-- Route không hợp lệ hiển thị 404.
-- Thiết kế responsive, keyboard focus, reduced motion và static security headers.
-- Unit/component test xác nhận không có form credential, không mở sai workspace và không có bảng dữ liệu dựng sẵn.
+1. Browser không nhận Google Client Secret, authorization code sau callback, ID token hoặc access token.
+2. Định danh ổn định là `issuer + subject`; email không phải user ID.
+3. Tenant và role lấy từ membership gắn với session, không tin dữ liệu do browser tự khai báo.
+4. Client session chỉ truy cập tenant của chính nó.
+5. Internal cross-tenant access vẫn phải qua permission backend.
+6. Mutation cần CSRF; ticket create cần idempotency key.
+7. Update cạnh tranh cần optimistic version.
+8. Audit event không được update/delete qua application database.
+9. Integration secret không được trả lại plaintext.
+10. UI không tạo record/số liệu thay thế khi backend rỗng hoặc lỗi.
 
-### 3.2. Backend
+## 4. Kiến trúc và ranh giới
 
-- Node.js HTTP service tách riêng trong `backend/`.
-- `GET /api/v1/health` cho liveness.
-- `GET /api/v1/ready` cho readiness.
-- Google OIDC login/callback, auth status, session và logout.
-- Membership theo `iss + sub`, tenant, role và workspace.
-- Opaque session cookie, CSRF logout và auth event trên stdout.
-- JSON error envelope, security headers, giới hạn header, timeout và graceful shutdown.
-- OpenAPI 3.1 tại `docs/api/openapi.yaml`.
-- Integration test qua HTTP server thật.
+```text
+React/Vite UI
+  -> same-origin Node.js API
+       -> policy + schema + service
+            -> PostgreSQL repository
+                 -> tenant RLS + append-only audit
+```
 
-## 4. Ngoài phạm vi hiện tại
+- Frontend route guard chỉ quyết định trải nghiệm hiển thị.
+- `portal-policy.js` ánh xạ role sang permission và resolve tenant scope.
+- `portal-service.js` kiểm tra permission trước khi parse/thực thi use case.
+- `portal-schema.js` từ chối unknown field, validate enum/length/time/URL.
+- `portal-repository.js` thực hiện SQL trong transaction đã cài tenant context.
+- PostgreSQL RLS là lớp phòng thủ bổ sung, không thay thế policy ở service.
 
-- Shared session store, session management UI, revoke từng phiên và recovery.
-- Bằng chứng MFA theo từng phiên; hiện MFA phải được cưỡng chế bởi Google Workspace policy.
-- API nghiệp vụ và database.
-- Dashboard realtime, SSE/WebSocket hoặc nguồn telemetry.
-- Ticket, incident dispatch, CRM, asset, license, billing, report và audit nghiệp vụ.
-- Điều khiển firewall, EDR, SIEM, SOAR hoặc thiết bị.
-- Thanh toán, file upload/download và quản lý secret tích hợp.
-- Cam kết production về SLA, uptime hoặc số lượng tấn công.
+## 5. IAM
 
-Các chức năng trên không được thay bằng logic hoặc dữ liệu cục bộ để tạo cảm giác đã hoạt động.
+### Google OIDC
 
-## 5. Route và hành vi hiện tại
+- Authorization Code Flow, scope `openid email profile`.
+- `state` chống login CSRF.
+- `nonce` ràng buộc ID token.
+- PKCE `S256` ràng buộc authorization code.
+- Callback backend: `/api/v1/auth/callback/google`.
+- Xác minh signature/JWKS, issuer, audience, expiry, nonce và `email_verified`.
+- Khi cấu hình Google Workspace domain, claim `hd` phải khớp chính xác.
 
-| Route | Quyền truy cập hiện tại | Hành vi |
-| --- | --- | --- |
-| `/` | Công khai | Hiển thị trạng thái Google OIDC/session; không có form credential |
-| `/company` | Công khai | Hiển thị website công ty QTS |
-| `/client` và `/client/*` | Session workspace `client` | Anonymous yêu cầu login; sai workspace bị từ chối; không có dữ liệu giả |
-| `/admin` và `/admin/*` | Session workspace `internal` | Anonymous yêu cầu login; sai workspace bị từ chối; không có dữ liệu giả |
-| Route khác | Công khai | Hiển thị 404 |
+### Session
 
-Guard frontend chỉ điều chỉnh UX, không phải authorization. Mọi API nghiệp vụ tương lai phải tự kiểm tra session, tenant và permission kể cả khi người dùng tự nhập URL.
+- Session ID ngẫu nhiên/opaque, chỉ bản băm được lưu PostgreSQL.
+- Cookie `HttpOnly`, `SameSite=Lax`, `Secure` và prefix `__Host-` ở production.
+- Session có TTL tối đa theo cấu hình và bị thu hồi khi member đổi role/status.
+- CSRF token gắn với session và được so sánh constant-time.
+- OIDC transaction là one-time record có TTL trong PostgreSQL.
 
-## 6. Mô hình quyền mục tiêu
+### Provisioning
 
-### 6.1. Vai trò khách hàng
+- Tài khoản đầu tiên bootstrap từ `QTS_AUTH_MEMBERSHIPS_JSON` theo `iss + sub`.
+- Tài khoản tiếp theo được pre-provision bằng invitation theo verified email.
+- Lần login đầu tiên nhận invitation và bind sang `iss + sub`.
+- Invitation quá hạn hoặc member disabled không tạo session.
 
-| Vai trò | Phạm vi dự kiến |
-| --- | --- |
-| `client_admin` | Quản trị người dùng tenant, xem toàn bộ dịch vụ được cấp |
-| `technical` | Cảnh báo, ticket, tài sản và tài liệu kỹ thuật |
-| `billing` | Hợp đồng, hóa đơn và license liên quan |
-| `client_viewer` | Chỉ đọc các tài nguyên được cấp |
+## 6. Role và permission
 
-### 6.2. Vai trò nội bộ QTS
+Client roles: `client_viewer`, `technical`, `billing`, `client_admin`.
 
-| Vai trò | Phạm vi dự kiến |
-| --- | --- |
-| `qts_admin` | Quản trị nền tảng theo chính sách đặc quyền |
-| `soc_l1` | Tiếp nhận, xác nhận và xử lý mức L1 |
-| `soc_l2` | Điều tra, xử lý và phân công L1/L2 |
-| `soc_l3` | Điều tra chuyên sâu và thay đổi đã được phê duyệt |
-| `account_manager` | Hồ sơ khách hàng, hợp đồng và theo dõi dịch vụ |
+Internal roles: `soc_l1`, `soc_l2`, `soc_l3`, `account_manager`, `qts_admin`.
 
-Các role này đang dùng để chọn workspace trong session nhưng chưa cấp quyền trên dữ liệu nghiệp vụ. Role matrix chi tiết vẫn phải được QTS duyệt và thực thi ở API cùng tầng truy vấn dữ liệu.
+Permission được chia theo domain: dashboard, tenants, alerts, tickets, assets, billing, documents, knowledge, integrations, members, shifts và audit. Matrix thực thi nằm tại `backend/src/portal-policy.js`; frontend dùng matrix tương ứng để ẩn thao tác không khả dụng nhưng backend luôn là authoritative source.
 
-## 7. Hợp đồng IAM bắt buộc
+## 7. Contract dữ liệu
 
-Nền tảng IAM hiện đã quyết định:
+### Danh sách
 
-1. Google OIDC Authorization Code Flow với `state`, `nonce` và PKCE S256.
-2. Định danh bằng `iss + sub`; kiểm tra `email_verified` và `hd` tùy cấu hình.
-3. Session opaque qua cookie `HttpOnly`, `Secure`, `SameSite=Lax` ở production.
-4. Tenant, role và workspace lấy từ membership backend.
-5. Logout dùng CSRF token và thu hồi session server-side.
+- Envelope: `data[]` và `pagination`.
+- `page >= 1`, `pageSize <= 100`.
+- `search <= 200` ký tự.
+- Chỉ chấp nhận sort/filter đã khai báo theo resource.
+- Client không thể override `tenantId` trong session.
 
-Trước production vẫn phải hoàn tất shared store, revoke theo phiên, account disable, emergency access, durable audit, cảnh báo bất thường và kiểm chứng chính sách MFA của Google Workspace.
+### Mutation
 
-## 8. Hợp đồng dữ liệu bắt buộc
+- JSON field ngoài allowlist bị từ chối `422`.
+- Resource ID nghiệp vụ là UUID; tenant ID có pattern riêng tối đa 64 ký tự.
+- Update cần `expectedVersion`; mismatch trả `409`.
+- Ticket create cần `Idempotency-Key`; dùng lại key với payload khác trả conflict.
+- Mutation thành công ghi audit cùng transaction dữ liệu khi phù hợp.
 
-Mỗi domain chỉ được bật sau khi có:
+### Tài liệu
 
-- OpenAPI được version hóa và review.
-- Schema database cùng migration/rollback.
-- Quy tắc tenant ownership và authorization.
-- Validation request/response ở biên API.
-- Pagination, filter, sort và giới hạn kích thước.
-- Loading, empty, error, unavailable và permission-denied state ở frontend.
-- Audit cho thao tác nhạy cảm; không log secret hoặc nội dung nhạy cảm không cần thiết.
-- Unit, integration và browser test, gồm kiểm thử truy cập chéo tenant.
-- Observability: structured log, metric, trace/correlation ID và alert phù hợp.
+- UI giới hạn 10 MiB; request JSON document giới hạn 14 MiB do Base64 overhead.
+- Chấp nhận PDF, text/plain và Markdown.
+- Backend kiểm tra payload/media type cơ bản và lưu SHA-256.
+- Download kiểm tra permission/tenant và ghi audit.
 
-## 9. Tech stack hiện tại
+### Secret tích hợp
 
-| Lớp | Công nghệ |
-| --- | --- |
-| Frontend | React 19, React DOM 19, TypeScript strict |
-| Build | Vite 7, target ES2022 |
-| Routing | History API nội bộ với tập route đóng |
-| Icon | Lucide React |
-| Style | CSS thuần và design token ba tầng |
-| Frontend test | Vitest, Testing Library, user-event, JSDOM |
-| Browser QA | Playwright |
-| Backend | Node.js HTTP API, `openid-client` cho OIDC |
-| API contract | OpenAPI 3.1 |
-| Backend test | Node.js test runner qua HTTP server thật |
-| Repository | npm workspaces, một lockfile ở root |
+- Endpoint bắt buộc HTTPS và không chứa username/password.
+- Secret tối thiểu 16 ký tự.
+- Mã hóa AES-256-GCM với nonce riêng, auth tag và additional authenticated data.
+- API response chỉ cho biết tình trạng có secret, không trả ciphertext/plaintext.
 
-Không có thư viện biểu đồ trong baseline vì chưa có nguồn metric thật.
+## 8. UX
 
-## 10. Ranh giới tin cậy và threat model
+- Client và Internal dùng một hệ thống đăng nhập, chuyển workspace theo role.
+- Internal có tenant selector; không chọn tenant tương đương view toàn cảnh cho thao tác đọc, nhưng mutation cần tenant cụ thể.
+- Dashboard tự làm mới 30 giây và luôn cho biết phạm vi/thời điểm tạo dữ liệu.
+- Mỗi page có loading, empty, error, denied và retry rõ ràng.
+- Mobile 320 px không có horizontal overflow; menu chuyển thành drawer.
+- Các thao tác icon có accessible name/tooltip; bàn phím có skip link và focus state.
+- Không mô tả số `0` là dữ liệu mẫu; đó là kết quả query thực.
 
-| Tài sản/biên | Nguy cơ chính | Kiểm soát hiện tại | Bắt buộc trước production |
+## 9. Threat model tóm tắt
+
+| Tài sản | Rủi ro | Kiểm soát hiện tại | Việc production còn cần |
 | --- | --- | --- | --- |
-| Cổng truy cập | Spoofing, replay, credential disclosure | Google OIDC, state, nonce, PKCE, cookie HttpOnly, rate limit | MFA policy, shared store, recovery an toàn |
-| Route client/admin | Elevation of privilege | Không render nghiệp vụ | Authorization server-side trên mọi endpoint |
-| Dữ liệu tenant | Cross-tenant disclosure | Chưa lưu/hiển thị | Tenant từ session, policy tầng truy vấn, test cô lập |
-| Ticket/sự cố | Tampering, repudiation | Chưa triển khai | Validation server, idempotency, audit append-only |
-| Report/hóa đơn | Information disclosure | Chưa triển khai | Access check, signed URL ngắn hạn, malware scan |
-| Integration secret | Disclosure, tampering | Không lưu secret | Vault/KMS, rotation, dual control |
-| Backend HTTP | DoS, disclosure | Timeout, header limit, lỗi không lộ stack | WAF, rate limit, authn/authz, capacity test |
+| Google login | CSRF/replay/token theft | state, nonce, PKCE, backend callback, HttpOnly cookie | Workspace MFA policy, IdP monitoring |
+| Session | Theft/fixation | random opaque ID, hash at rest, expiry, Secure/SameSite | Central revocation operations, anomaly detection |
+| Dữ liệu tenant | Cross-tenant disclosure | backend scope + PostgreSQL RLS + tests | Independent security review/pentest |
+| Ticket/incident | Tampering/duplicate | validation, optimistic version, idempotency, audit | Dual control cho thao tác rủi ro cao |
+| Integration secret | Disclosure | AES-256-GCM, response redaction | KMS rotation job và vault integration |
+| Tài liệu | Malware/disclosure | type/size check, checksum, auth download | AV/CDR, object storage, DLP, retention |
+| Audit | Repudiation | append-only trigger, actor/request metadata | WORM export, SIEM correlation, retention |
 
-## 11. Kiến trúc production mục tiêu
+## 10. Yêu cầu phi chức năng
 
-1. Một backend dùng chung domain nhưng tách module và policy cho Client/Internal Portal.
-2. PostgreSQL cho tenant, user mapping, permission, ticket, asset, contract, invoice và audit metadata.
-3. OpenSearch/Elasticsearch chỉ khi volume và truy vấn telemetry chứng minh nhu cầu; index phải cô lập tenant.
-4. Object storage mã hóa cho report, bằng signed URL ngắn hạn.
-5. Secret manager và KMS/HSM cho secret, key và dữ liệu nhạy cảm at-rest.
-6. SSE/WebSocket chỉ sau khi có authenticated connection, tenant authorization, backpressure và rate limit.
-7. TLS 1.2+, WAF/DDoS protection, network segmentation và backup/restore đã diễn tập.
-8. CI/CD có secret scan, SAST, SCA, IaC scan, DAST staging và pentest trước go-live.
+- Backend fail startup nếu cấu hình auth/database/encryption không hợp lệ.
+- Production chỉ dùng HTTPS và PostgreSQL TLS.
+- Production tách owner chạy migration khỏi role runtime `qts_app` không có `SUPERUSER`/`BYPASSRLS`; startup phải fail-fast nếu cấu hình sai.
+- Health tách liveness (`/health`) và readiness có database (`/ready`).
+- Backend có request/header/keep-alive timeout, max header count và graceful shutdown.
+- Frontend production không ship sourcemap.
+- Không có secret, tài khoản hoặc operational seed trong Git.
+- Quality gate tối thiểu: typecheck, lint, unit test, database integration, build, dependency audit và browser smoke test.
 
-## 12. Tiêu chí chấp nhận baseline hiện tại
+## 11. Tiêu chí nghiệm thu ứng dụng
 
-1. Không còn module dữ liệu vận hành hoặc state mutation cục bộ.
-2. Không có form credential, mã MFA, SSO thay thế, persona, Google token hoặc session dựng sẵn trong frontend.
-3. `/client/*` và `/admin/*` không render bảng, biểu đồ hoặc số liệu nghiệp vụ.
-4. `/company` tiếp tục hoạt động và dùng logo QTS.
-5. Backend chỉ công bố endpoint hạ tầng và auth có trong OpenAPI.
-6. Test, typecheck, lint, build và dependency audit đạt.
-7. Browser console sạch, không overflow hoặc chồng lấp ở desktop/mobile.
-8. README và runbook phản ánh đúng trạng thái OIDC, session in-memory và điều kiện production.
+- Google login thật tạo session QTS và redirect đúng workspace.
+- Role sai không mở route và API trả forbidden.
+- Client không đọc/ghi tenant khác ngay cả khi sửa request thủ công.
+- Internal tenant selector thay đổi đúng scope truy vấn.
+- CRUD/flow chính của từng module lưu và đọc lại từ PostgreSQL.
+- Ticket idempotency, version conflict và comment visibility hoạt động.
+- Member role/status change thu hồi session.
+- Audit ghi đúng actor/action/resource/outcome.
+- Database rỗng cho empty state, không sinh dữ liệu giả.
+- UI không overflow ở mobile và không có console error trong smoke flow.
 
-## 13. Quyết định QTS cần phê duyệt
-
-- Chính sách MFA Google Workspace, shared session store, recovery và emergency access.
-- Tenant model, role matrix và quy trình phê duyệt đặc quyền.
-- Backend runtime dài hạn và dữ liệu của từng domain.
-- Cloud/region, retention, RTO/RPO, backup và key management.
-- Nguồn telemetry, taxonomy severity, SLA và escalation.
-- Payment provider, thẩm quyền hóa đơn và quy trình đối soát.
-- Danh sách SIEM/SOAR/EDR/webhook được phép tích hợp.
+Các tiêu chí production như HA, WAF, ingestion, backup restore drill, load test, DAST và pentest nằm trong [QTS_WORKSPACE_PLAN.md](QTS_WORKSPACE_PLAN.md).

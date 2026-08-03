@@ -1,8 +1,12 @@
-import { createDatabase, readDatabaseConfig } from "../src/database.js";
+import {
+  createDatabase,
+  readDatabaseConfig,
+  readMigrationDatabaseConfig,
+} from "../src/database.js";
 import { rollbackLastMigration, runMigrations } from "../src/migrator.js";
 
 const command = process.argv[2] ?? "migrate";
-const pool = createDatabase(readDatabaseConfig());
+const pool = createDatabase(readMigrationDatabaseConfig() ?? readDatabaseConfig());
 
 try {
   if (command === "migrate") {

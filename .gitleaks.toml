@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Known non-secret idempotency fixture used only by the PostgreSQL integration test"
+rules = ["generic-api-key"]
+paths = ['''backend/integration/portal-repository\.test\.js''']
+regexes = ['''integration-ticket-001''']

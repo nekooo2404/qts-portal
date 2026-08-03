@@ -1,358 +1,618 @@
 # QTS Operations Portal
 
-QTS Operations Portal là monorepo tách riêng frontend React/Vite và backend Node.js cho nền tảng công nghệ, an ninh mạng của QTS tại Việt Nam.
+QTS Operations Portal là hệ thống quản trị công nghệ và an ninh mạng đa tenant dành cho QTS Việt Nam. Một backend dùng chung cung cấp hai không gian được phân quyền độc lập:
 
-Hệ thống đã có Google OpenID Connect theo Authorization Code Flow, `state`, `nonce`, PKCE S256, ánh xạ tenant/role bằng `iss + sub`, session cookie phía backend và CSRF cho logout. Repository không chứa tài khoản, tenant hay dữ liệu vận hành dựng sẵn. Các API nghiệp vụ như SOC, ticket, asset và billing chưa được triển khai nên giao diện không tự tạo số liệu thay thế.
+- **Client Portal**: khách hàng theo dõi cảnh báo, tài sản, license, ticket/SLA, hợp đồng, hóa đơn, báo cáo và tài khoản thuộc tenant của mình.
+- **Internal Portal**: SOC, kỹ sư, account manager và quản trị viên QTS giám sát nhiều khách hàng, điều phối sự cố, quản lý tích hợp, ca trực và audit.
 
-## 1. Trạng thái chức năng
+Portal dùng Google OAuth 2.0/OpenID Connect theo Authorization Code Flow. Backend là bên duy nhất xử lý authorization code, Google Client Secret và ID token; browser chỉ nhận session cookie opaque của QTS.
 
-| Hạng mục | Trạng thái | Hành vi hiện tại |
-| --- | --- | --- |
-| Website QTS | Hoạt động | `/company` hiển thị nội dung công nghệ và an ninh |
-| Google OIDC | Hoạt động khi có biến môi trường | Callback và token exchange chỉ chạy ở backend |
-| Session QTS | Hoạt động | Opaque session ID trong cookie HttpOnly; Google token không đi vào frontend |
-| RBAC | Hoạt động ở cổng truy cập | Backend ánh xạ `iss + sub` sang tenant, role và workspace |
-| Client Portal | Có cổng bảo vệ | Chỉ mở trạng thái đã xác thực; chưa có dữ liệu nghiệp vụ |
-| Internal Portal | Có cổng bảo vệ | Chỉ mở trạng thái đã xác thực; chưa có dữ liệu SOC |
-| API nghiệp vụ | Chưa triển khai | Không có ticket, incident, asset, billing, CRM hoặc telemetry |
-| Database/search | Chưa triển khai | Session và giao dịch OIDC đang lưu trong RAM của một backend process |
-| Audit bền vững | Chưa triển khai | Auth event được ghi JSON ra stdout; chưa có kho append-only |
+> Repository không seed user, tenant, cảnh báo, ticket, tài sản, hóa đơn hay số liệu vận hành giả. Khi database chưa có bản ghi, giao diện hiển thị empty state và các chỉ số thực tế bằng `0`.
+
+## 1. Trạng thái triển khai
+
+| Nhóm | Đã triển khai |
+| --- | --- |
+| IAM | Google OIDC, `state`, `nonce`, PKCE S256, kiểm tra claim, membership theo `iss + sub`, session PostgreSQL, CSRF, RBAC |
+| Multi-tenant | Tenant scope lấy từ session, internal scope có chọn tenant, PostgreSQL Row-Level Security |
+| Client Portal | Dashboard, cảnh báo, ticket, tài sản, license, hợp đồng, hóa đơn, tài liệu, knowledge base, thành viên, audit |
+| Internal Portal | SOC dashboard đa khách hàng, cảnh báo, điều phối ticket, khách hàng, tài sản, license, billing, tài liệu, knowledge, tích hợp, thành viên, ca trực, audit |
+| Dữ liệu | PostgreSQL 17, migration tiến/lùi, phân trang, tìm kiếm, optimistic concurrency, audit append-only |
+| Bảo vệ dữ liệu | Cookie HttpOnly, secret tích hợp AES-256-GCM, checksum tài liệu, validation fail-closed, request ID |
+| Giao diện | Responsive desktop/mobile, dark security workspace, loading/empty/error/denied state, không fallback dữ liệu cục bộ |
+
+Đây là nền tảng vận hành đầy đủ ở mức ứng dụng. Trước khi go-live production vẫn phải triển khai TLS/WAF, secret manager/KMS, PostgreSQL HA/backup, giám sát tập trung, quét file, connector ingestion, kiểm thử tải và pentest. Xem [Giới hạn và việc cần làm trước production](#17-giới-hạn-và-việc-cần-làm-trước-production).
 
 ## 2. Kiến trúc
 
 ```text
 Browser
-  -> frontend React/Vite
-       -> /company
-       -> /, /client/*, /admin/*
-       -> /api/* (same-origin; Vite proxy ở development)
-            -> backend Node.js
-                 -> Google OIDC discovery/JWKS/token endpoint
-                 -> transaction store trong RAM
-                 -> session store trong RAM
-                 -> membership allowlist từ biến môi trường
+  |
+  | HTTPS, same-origin cookie
+  v
+Frontend React/Vite
+  |-- /company
+  |-- /client/*
+  |-- /admin/*
+  |
+  | /api/*
+  v
+Backend Node.js
+  |-- Google OIDC discovery, JWKS và token endpoint
+  |-- Session, CSRF, RBAC và tenant scope
+  |-- Validation, idempotency và audit
+  v
+PostgreSQL 17
+  |-- identity, session và OIDC transaction
+  |-- dữ liệu nghiệp vụ
+  |-- Row-Level Security
+  `-- audit append-only
 ```
 
-Frontend và backend có trách nhiệm khác nhau:
+Frontend và backend tách rõ trách nhiệm:
 
-- Frontend chỉ render trạng thái loading, anonymous, authenticated, forbidden và unavailable.
-- Frontend không nhận client secret, authorization code, ID token hoặc access token để lưu trữ.
-- Backend tạo `state`, `nonce`, PKCE verifier/challenge, nhận callback và đổi authorization code.
-- Backend dùng `openid-client` để xác minh chữ ký ID token và kiểm tra giao thức OIDC.
-- Backend kiểm tra lại `iss`, `aud`, `exp`, `nonce`, `email_verified` và `hd` nếu được cấu hình.
-- Backend lấy tenant/role từ allowlist đã quản trị; không tin `tenantId` hoặc `role` do browser gửi.
+- **Frontend** chỉ render dữ liệu API, điều hướng và gửi mutation kèm CSRF token. Frontend không quyết định quyền cuối cùng.
+- **Backend** xác thực session, lấy role/tenant từ database, kiểm tra permission, validate input và ghi audit cho mutation.
+- **PostgreSQL** lưu session, OIDC transaction, membership và toàn bộ dữ liệu nghiệp vụ. RLS là lớp bảo vệ bổ sung bên dưới backend policy.
+- **Google** chỉ là Identity Provider. Email dùng để khớp lời mời lần đầu; định danh ổn định sau đó luôn là cặp `iss + sub`.
 
-## 3. Công nghệ
+## 3. Cấu trúc repository
+
+```text
+qts-portal/
+|-- frontend/                     # React 19 + TypeScript + Vite
+|   |-- src/auth/                 # Auth state và route gateway
+|   |-- src/components/portal/    # Shell, status và feedback state
+|   |-- src/pages/portal/         # Client/Internal workspace
+|   `-- src/portal/               # API client, permission, resource config
+|-- backend/                      # Node.js ESM HTTP API
+|   |-- src/app.js                # Route HTTP, cookie, CSRF, body limit
+|   |-- src/auth-*.js             # OIDC, session và auth config
+|   |-- src/portal-*.js           # Policy, schema, service, repository
+|   |-- src/database.js           # PostgreSQL pool và tenant transaction
+|   |-- migrations/               # Migration SQL tiến/lùi
+|   |-- test/                     # Unit/HTTP tests
+|   `-- integration/              # PostgreSQL integration tests
+|-- docs/api/openapi.yaml         # Hợp đồng API
+|-- docs/decisions/               # Architecture Decision Records
+|-- compose.yaml                  # PostgreSQL local
+|-- package.json                  # npm workspaces và quality gate
+`-- README.md                     # Tài liệu cài đặt/vận hành chính
+```
+
+## 4. Công nghệ
 
 | Lớp | Công nghệ | Vai trò |
 | --- | --- | --- |
-| Frontend | React `19.2.8`, TypeScript `6.0.3` | Giao diện và route trạng thái |
-| Build frontend | Vite `7.3.6` | Dev server, proxy và production bundle |
-| UI | CSS custom properties, Lucide React | Design token và icon |
-| Backend | Node.js HTTP, ESM | API, cookie, session và lifecycle |
-| OIDC | `openid-client` `6.8.4` | Discovery, authorization URL, token exchange và ID token validation |
-| Test frontend | Vitest, Testing Library, JSDOM | Component và luồng auth UI |
-| Test backend | Node.js test runner | HTTP integration, config, OIDC adapter và session |
-| API contract | OpenAPI `3.1.0` | Hợp đồng endpoint tại `docs/api/openapi.yaml` |
-| Monorepo | npm workspaces | Một lockfile cho frontend và backend |
+| Frontend | React `19.2.8`, TypeScript `6.0.3` | UI component và type-safe client |
+| Build | Vite `7.3.6` | Dev server, proxy `/api`, production bundle |
+| UI | CSS custom properties, Lucide React | Design system, responsive layout và icon |
+| Backend | Node.js native HTTP, ESM | API, lifecycle, timeout và graceful shutdown |
+| OIDC | `openid-client` `6.8.4` | Discovery, PKCE, token exchange, JWKS/ID token validation |
+| Database | PostgreSQL `17`, `pg` `8.22.0` | Transaction, RLS, persistence, search và audit |
+| Mã hóa | Node.js Crypto, AES-256-GCM | Mã hóa secret tích hợp tại application layer |
+| Test | Vitest, Testing Library, Node test runner | Frontend, backend và integration database |
+| Contract | OpenAPI `3.1` | Tài liệu endpoint và error envelope |
+| Local infra | Docker Compose | Chạy PostgreSQL cô lập trên `127.0.0.1:5432` |
 
-## 4. Yêu cầu môi trường
+Elasticsearch, Kubernetes và cloud provider chưa được đưa vào repository này. PostgreSQL đang đảm nhiệm tìm kiếm nghiệp vụ có cấu trúc; không nên mô tả hệ thống hiện tại là đã có Elasticsearch.
 
-- Node.js thỏa `^20.19.0 || >=22.12.0`.
-- npm tương thích với lockfile.
-- Một Google Cloud project có OAuth consent configuration.
-- HTTPS ở production.
-- Google Workspace Admin Console nếu QTS muốn bắt buộc 2-Step Verification cho tài khoản nhân viên.
+## 5. Chức năng và route
 
-Kiểm tra và cài dependency:
+### 5.1. Client Portal
+
+| Route | Chức năng |
+| --- | --- |
+| `/client/overview` | Chỉ số cảnh báo, ticket/SLA, sức khỏe tài sản, license và xu hướng 7 ngày |
+| `/client/alerts` | Xem cảnh báo trong đúng tenant |
+| `/client/tickets` | Tạo ticket, theo dõi SLA, trao đổi với QTS |
+| `/client/assets` | Xem tài sản, criticality, health và lần ghi nhận cuối |
+| `/client/licenses` | Theo dõi license, số lượng và ngày hết hạn |
+| `/client/contracts` | Xem hợp đồng và thời hạn |
+| `/client/invoices` | Xem hóa đơn và trạng thái thanh toán |
+| `/client/documents` | Xem/tải báo cáo và tài liệu được cấp quyền |
+| `/client/knowledge` | Xem knowledge base dành cho khách hàng |
+| `/client/team` | `client_admin` mời, đổi role hoặc vô hiệu hóa thành viên tenant |
+| `/client/audit` | Xem hoạt động thuộc tenant theo quyền |
+
+### 5.2. Internal Portal
+
+| Route | Chức năng |
+| --- | --- |
+| `/admin/soc` | Tổng quan toàn bộ tenant hoặc tenant đang chọn |
+| `/admin/alerts` | Tạo, xác nhận và xử lý cảnh báo |
+| `/admin/tickets` | Điều phối ticket, severity, assignee, workflow và ghi chú nội bộ |
+| `/admin/customers` | Hồ sơ tenant, gói dịch vụ, liên hệ khẩn cấp và SLA theo severity |
+| `/admin/assets` | Quản lý inventory và sức khỏe tài sản |
+| `/admin/licenses` | Quản lý license và thời hạn |
+| `/admin/contracts` | Quản lý hợp đồng |
+| `/admin/invoices` | Quản lý hóa đơn |
+| `/admin/documents` | Tải báo cáo/tài liệu lên và tải xuống có checksum |
+| `/admin/knowledge` | Soạn, xuất bản và lưu trữ bài viết |
+| `/admin/integrations` | Lưu metadata SIEM/SOAR/EDR/webhook và secret đã mã hóa |
+| `/admin/team` | Mời và quản lý tài khoản client/internal theo quyền |
+| `/admin/shifts` | Lập ca SOC L1/L2/L3, thời gian và ghi chú bàn giao |
+| `/admin/audit` | Tra cứu audit theo tenant, action, outcome và resource |
+
+Dashboard tự làm mới mỗi 30 giây bằng dữ liệu đã lưu trong PostgreSQL. Đây không phải WebSocket và repository chưa có worker tự kéo log từ SIEM/EDR.
+
+## 6. RBAC
+
+Backend là nguồn quyết định quyền. Việc ẩn nút/menu ở frontend chỉ cải thiện UX.
+
+| Role | Workspace | Quyền chính |
+| --- | --- | --- |
+| `client_viewer` | Client | Chỉ đọc dashboard, cảnh báo, ticket, tài sản, billing, tài liệu, knowledge và audit |
+| `technical` | Client | Quyền đọc như viewer, tạo/comment ticket, xem cấu hình tích hợp |
+| `billing` | Client | Dashboard, ticket, tạo ticket, hợp đồng/hóa đơn, tài liệu và knowledge |
+| `client_admin` | Client | Quyền đọc tenant, tạo ticket, xem tích hợp, mời và quản lý role client |
+| `soc_l1` | Internal | Dashboard đa tenant, cảnh báo, ticket, tài sản đọc, tài liệu đọc, ca trực đọc, audit |
+| `soc_l2` | Internal | Thêm quyền sửa tài sản/tài liệu, xem tích hợp và quản lý ca trực |
+| `soc_l3` | Internal | Thêm quyền quản lý knowledge base |
+| `account_manager` | Internal | Quản lý tenant, asset, billing, document, knowledge; xem thành viên/tích hợp/ca trực/audit |
+| `qts_admin` | Internal | Toàn bộ permission, bao gồm tích hợp, thành viên và role internal |
+
+Client role không thể chuyển scope sang tenant khác. `client_admin` chỉ được cấp bốn role client. Internal role có thể truy vấn nhiều tenant theo permission và tenant selector.
+
+## 7. Yêu cầu môi trường
+
+- Windows PowerShell, macOS hoặc Linux.
+- Node.js `^20.19.0 || >=22.12.0`.
+- npm tương thích với `package-lock.json`.
+- Docker Desktop/Engine có Docker Compose cho môi trường local.
+- Google Cloud project có OAuth consent screen và OAuth Client loại **Web application**.
+- Tài khoản Google thật để smoke test đăng nhập.
+
+Kiểm tra công cụ:
+
+```powershell
+node --version
+npm --version
+docker --version
+docker compose version
+```
+
+## 8. Cài đặt local từ đầu
+
+### Bước 1: cài dependency
 
 ```powershell
 cd D:\hoapuiii\Code\qts-portal
-node --version
-npm --version
 npm ci
 ```
 
-## 5. Tạo OAuth Client trên Google Cloud
+### Bước 2: tạo file môi trường backend
 
-### 5.1. Cấu hình consent
+```powershell
+Copy-Item backend\.env.example backend\.env
+```
 
-1. Mở Google Cloud Console và chọn đúng project dùng cho QTS Portal.
-2. Mở Google Auth Platform, hoàn tất Branding, Audience và Data Access.
-3. Khai báo các scope `openid`, `email`, `profile`.
-4. Nếu ứng dụng chỉ phục vụ Google Workspace của QTS, chọn audience nội bộ phù hợp với tổ chức. Việc này không thay thế kiểm tra claim `hd` tại backend.
-5. Nếu ứng dụng ở chế độ testing, thêm đúng test users theo chính sách Google.
+Sinh password PostgreSQL dạng hex, an toàn khi đặt trực tiếp trong database URL:
 
-### 5.2. Tạo Web application client
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(24).toString('hex'))"
+```
 
-1. Vào Google Auth Platform > Clients.
-2. Chọn Create client > Web application.
-3. Đặt tên nhận diện rõ môi trường, ví dụ client riêng cho development và production.
-4. Khai báo Authorized JavaScript origins theo origin thực tế.
-5. Khai báo Authorized redirect URIs khớp tuyệt đối với callback backend.
+Sinh khóa AES-256 đúng 32 byte, mã hóa Base64:
 
-Development theo cấu hình mẫu:
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+```
+
+Điền password thứ nhất vào cả `QTS_POSTGRES_PASSWORD` và phần password của `QTS_DATABASE_URL`. Điền giá trị thứ hai vào `QTS_DATA_ENCRYPTION_KEY`.
+
+Ví dụ cấu trúc, không dùng nguyên giá trị minh họa:
+
+```dotenv
+QTS_POSTGRES_PASSWORD=<postgres-password-vua-sinh>
+QTS_DATABASE_URL=postgresql://qts:<postgres-password-vua-sinh>@127.0.0.1:5432/qts_portal
+QTS_DATA_ENCRYPTION_KEY=<base64-32-byte-key-vua-sinh>
+```
+
+Nếu password chứa ký tự đặc biệt thay vì chuỗi hex, phải URL-encode phần password trong `QTS_DATABASE_URL`.
+
+### Bước 3: chạy PostgreSQL
+
+```powershell
+docker compose --env-file backend/.env up -d database
+docker compose --env-file backend/.env ps
+```
+
+Chạy migration chủ động:
+
+```powershell
+npm run db:migrate:env --workspace @qts/backend
+```
+
+Backend cũng tự chạy các migration chưa áp dụng khi khởi động. Migration được ghi nhận trong bảng `schema_migrations` và có advisory lock để tránh hai process migrate đồng thời.
+
+### Bước 4: chạy backend
+
+Mở terminal thứ nhất:
+
+```powershell
+cd D:\hoapuiii\Code\qts-portal
+npm run dev:backend:env
+```
+
+Kiểm tra:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8080/api/v1/health
+Invoke-RestMethod http://127.0.0.1:8080/api/v1/ready
+Invoke-RestMethod http://127.0.0.1:8080/api/v1/auth/status
+```
+
+### Bước 5: chạy frontend
+
+Mở terminal thứ hai:
+
+```powershell
+cd D:\hoapuiii\Code\qts-portal
+npm run dev:frontend
+```
+
+Mở **`http://localhost:5173`**. Không đổi qua lại giữa `localhost` và `127.0.0.1` trong một luồng OIDC vì cookie giao dịch và redirect URI phụ thuộc hostname chính xác.
+
+## 9. Tạo Google OAuth Client
+
+1. Mở Google Cloud Console và chọn đúng project.
+2. Vào **Google Auth Platform**; hoàn tất Branding, Audience và Data Access.
+3. Chọn scope `openid`, `email`, `profile`.
+4. Vào **Clients** > **Create client** > **Web application**.
+5. Khai báo local development:
 
 ```text
 Authorized JavaScript origin: http://localhost:5173
 Authorized redirect URI:      http://localhost:5173/api/v1/auth/callback/google
 ```
 
-Production:
+6. Khai báo production bằng public HTTPS origin thực tế:
 
 ```text
-Authorized JavaScript origin: https://portal.<ten-mien-qts>
-Authorized redirect URI:      https://portal.<ten-mien-qts>/api/v1/auth/callback/google
+Authorized JavaScript origin: https://portal.example.vn
+Authorized redirect URI:      https://portal.example.vn/api/v1/auth/callback/google
 ```
 
-6. Ghi nhận Client ID và Client Secret vào secret manager của backend.
-7. Không đặt Client Secret trong `VITE_*`, source code, Docker image, log, ticket hoặc Git.
+7. Điền Client ID và Client Secret vào `backend/.env`:
 
-Redirect URI đi qua public origin rồi reverse proxy tới backend. Đây vẫn là callback backend vì frontend không xử lý authorization code.
-
-## 6. Cấu hình backend
-
-File [backend/.env.example](backend/.env.example) chỉ chứa tên biến và giá trị không nhạy cảm. Tạo `backend/.env` cho development; file này đã bị Git bỏ qua.
-
-```powershell
-Copy-Item backend\.env.example backend\.env
+```dotenv
+QTS_PUBLIC_ORIGIN=http://localhost:5173
+QTS_AUTH_COOKIE_SECURE=false
+GOOGLE_CLIENT_ID=<client-id>.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=<client-secret>
+GOOGLE_WORKSPACE_DOMAIN=
+QTS_AUTH_MEMBERSHIPS_JSON=[]
 ```
 
-Điền các biến sau trong `backend/.env`:
+`GOOGLE_CLIENT_SECRET` chỉ tồn tại ở backend `.env`/secret manager. Không đặt secret trong biến `VITE_*`, frontend, Docker image, log, ticket hay Git.
 
-| Biến | Bắt buộc | Quy tắc |
+Nếu chỉ cho phép tài khoản Google Workspace QTS, điền domain thực tế vào `GOOGLE_WORKSPACE_DOMAIN`. Backend kiểm tra claim `hd`; kiểm tra đuôi email không được dùng thay thế. MFA/2-Step Verification phải được cưỡng chế bằng chính sách Google Workspace vì ID token của luồng này không chứng minh riêng từng lần đăng nhập đã step-up MFA.
+
+## 10. Biến môi trường backend
+
+| Biến | Bắt buộc | Cách lấy / quy tắc |
 | --- | --- | --- |
-| `NODE_ENV` | Có | `development` ở local, `production` khi deploy |
-| `QTS_API_HOST` | Không | Mặc định `127.0.0.1` |
-| `QTS_API_PORT` | Không | Mặc định `8080` |
-| `QTS_TRUST_PROXY_HOPS` | Không | Mặc định `0`; chỉ tăng khi backend chỉ nhận traffic từ đúng số proxy tin cậy |
-| `QTS_PUBLIC_ORIGIN` | Có khi bật OIDC | Chỉ scheme + host + port; không có path/query/hash |
-| `QTS_AUTH_COOKIE_SECURE` | Có ở local HTTP | `false` chỉ cho local; production bắt buộc `true` |
-| `GOOGLE_CLIENT_ID` | Có | Client ID của Web application |
-| `GOOGLE_CLIENT_SECRET` | Có | Chỉ cấp cho backend qua secret manager hoặc env |
-| `GOOGLE_WORKSPACE_DOMAIN` | Không | Domain `hd` phải khớp; để trống nếu không giới hạn Workspace |
-| `QTS_AUTH_MEMBERSHIPS_JSON` | Có | Mảng JSON ánh xạ `issuer`, `subject`, `tenantId`, `role` |
+| `NODE_ENV` | Có | `development` local, `production` khi deploy |
+| `QTS_API_HOST` | Không | Mặc định `127.0.0.1`; production thường bind private interface/container |
+| `QTS_API_PORT` | Không | Mặc định `8080`, phạm vi `1..65535` |
+| `QTS_TRUST_PROXY_HOPS` | Không | Mặc định `0`; chỉ đặt đúng số reverse proxy tin cậy trước backend |
+| `QTS_PUBLIC_ORIGIN` | Có khi bật OIDC | Origin public chính xác, chỉ gồm scheme/host/port; production bắt buộc HTTPS |
+| `QTS_AUTH_COOKIE_SECURE` | Có | `false` chỉ cho local HTTP; production bắt buộc `true` |
+| `QTS_POSTGRES_PASSWORD` | Có với Compose | Tự sinh/secret manager; Compose dùng để tạo user `qts` |
+| `QTS_DATABASE_URL` | Có | URL runtime; local dùng owner `qts`, production bắt buộc đăng nhập bằng role `qts_app` không có `SUPERUSER`/`BYPASSRLS` |
+| `QTS_MIGRATION_DATABASE_URL` | Có ở production | URL owner/DDL riêng để chạy migration; không dùng credential này cho traffic ứng dụng |
+| `QTS_DATABASE_SSL` | Có | `false` local; production bắt buộc `true` và CA phải được hệ thống tin cậy |
+| `QTS_DATABASE_POOL_MAX` | Không | `2..50`, mặc định `10`; tính theo tổng số replica |
+| `QTS_DATABASE_IDLE_TIMEOUT_MS` | Không | `1000..300000`, mặc định `30000` |
+| `QTS_DATABASE_CONNECT_TIMEOUT_MS` | Không | `500..60000`, mặc định `5000` |
+| `QTS_DATA_ENCRYPTION_KEY` | Có | Base64 giải mã đúng 32 byte; lưu trong secret manager/KMS-backed secret |
+| `GOOGLE_CLIENT_ID` | Có khi bật OIDC | Google OAuth Client loại Web application |
+| `GOOGLE_CLIENT_SECRET` | Có khi bật OIDC | Lấy cùng OAuth Client; backend-only secret |
+| `GOOGLE_WORKSPACE_DOMAIN` | Không | Giá trị claim `hd` được phép; để trống nếu nhận tài khoản ngoài Workspace |
+| `QTS_AUTH_MEMBERSHIPS_JSON` | Có khi bật OIDC | JSON bootstrap `iss + sub`; dùng `[]` khi không bootstrap thêm tài khoản |
 | `QTS_AUTH_TRANSACTION_TTL_SECONDS` | Không | `120..900`, mặc định `600` |
-| `QTS_SESSION_TTL_SECONDS` | Không | `900..86400`, mặc định `28800` |
+| `QTS_SESSION_TTL_SECONDS` | Không | `900..86400`, mặc định `28800` (8 giờ) |
 
-OIDC chỉ được bật khi có đồng thời `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` và `QTS_AUTH_MEMBERSHIPS_JSON`. Nếu cấu hình một phần, backend dừng ngay thay vì chạy nửa vời.
+OIDC chỉ bật khi có đồng thời `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` và `QTS_AUTH_MEMBERSHIPS_JSON` (mảng rỗng vẫn hợp lệ). Cấu hình thiếu một phần làm backend dừng ngay, không chạy ở trạng thái nửa cấu hình.
 
-Khởi động backend có đọc `backend/.env`:
+### 10.1. Tách quyền database ở production
+
+Migration `005_runtime_database_role` tạo role nhóm `qts_app` với `NOLOGIN`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT` và `NOBYPASSRLS`, sau đó chỉ cấp quyền DML cần cho ứng dụng. DBA cấp `LOGIN` và password riêng qua kênh quản trị an toàn, ví dụ mở `psql` bằng tài khoản owner rồi dùng `\password qts_app`; không đặt password trực tiếp trong lịch sử shell.
+
+Production phải dùng hai secret tách biệt:
+
+```dotenv
+NODE_ENV=production
+QTS_DATABASE_URL=postgresql://qts_app:<runtime-password>@<database-host>/qts_portal
+QTS_MIGRATION_DATABASE_URL=postgresql://<migration-owner>:<migration-password>@<database-host>/qts_portal
+QTS_DATABASE_SSL=true
+```
+
+Release job dùng `QTS_MIGRATION_DATABASE_URL` để áp dụng migration, còn request runtime chỉ dùng `QTS_DATABASE_URL`. Backend production từ chối khởi động nếu thiếu URL migration hoặc nếu runtime connection không đúng role `qts_app`, là superuser, hay có `BYPASSRLS`. Ở local, Compose vẫn kết nối bằng owner `qts` để đơn giản hóa setup, nhưng mọi transaction nghiệp vụ đều hạ quyền bằng `SET LOCAL ROLE qts_app` trước khi đặt tenant scope.
+
+## 11. Tạo superuser đầu tiên
+
+Tạo một record `qts_admin` trong database là đủ để tài khoản đó đăng nhập Internal Portal, nhưng phải dùng đúng `iss + sub` của tài khoản Google.
+
+### 11.1. Thu thập định danh an toàn
+
+1. Đặt `QTS_AUTH_MEMBERSHIPS_JSON=[]` và khởi động lại backend.
+2. Đăng nhập Google bằng tài khoản cần cấp quyền.
+3. Backend trả `MEMBERSHIP_NOT_FOUND` và không phát session.
+4. Truy vấn audit trong PostgreSQL:
 
 ```powershell
+$qtsDatabaseContainer = docker compose --env-file backend/.env ps -q database
+docker exec $qtsDatabaseContainer psql -U qts -d qts_portal -c "SELECT actor_issuer, actor_subject, metadata->>'email' AS email, created_at FROM audit_events WHERE action = 'auth.membership_not_found' ORDER BY created_at DESC LIMIT 10;"
+```
+
+5. Xác minh người yêu cầu qua quy trình nội bộ QTS. Email chỉ để đối chiếu; lấy `actor_issuer` và `actor_subject` làm định danh.
+
+### 11.2. Bootstrap `qts_admin`
+
+Đặt JSON trên một dòng trong `backend/.env`:
+
+```dotenv
+QTS_AUTH_MEMBERSHIPS_JSON=[{"issuer":"https://accounts.google.com","subject":"<actor_subject>","tenantId":"qts-vn","role":"qts_admin"}]
+```
+
+Khởi động lại backend. Startup sẽ tạo tenant `qts-vn` nếu chưa có và upsert membership. Đăng nhập lại tại `http://localhost:5173`; tài khoản sẽ vào `/admin/soc`.
+
+Lưu ý quan trọng: membership còn nằm trong `QTS_AUTH_MEMBERSHIPS_JSON` sẽ được upsert lại sau mỗi lần backend khởi động. Sau khi bootstrap thành công và có ít nhất một quản trị viên dự phòng, có thể đổi biến về `[]`; record trong PostgreSQL vẫn tồn tại và từ đó được quản lý qua portal. Nếu giữ entry làm break-glass account, phải quản trị file/secret và quy trình phê duyệt tương ứng.
+
+## 12. Thêm tài khoản đăng nhập hằng ngày
+
+Sau khi có `qts_admin`, không cần lấy `sub` thủ công cho từng người dùng:
+
+1. Vào **Internal Portal** > **Thành viên**.
+2. Với tài khoản khách hàng, chọn tenant cần cấp. Tenant phải được tạo trước tại **Khách hàng**.
+3. Chọn **Mời tài khoản**, nhập email Google đã xác minh, role và hạn dùng lời mời.
+4. Lời mời phải hết hạn trong tương lai và không quá 30 ngày; mặc định UI là 7 ngày.
+5. Gửi đường dẫn portal cho người dùng qua kênh đã được QTS phê duyệt. Hệ thống hiện chưa tự gửi email.
+6. Ở lần đăng nhập Google đầu tiên, backend khớp email lời mời, kiểm tra `email_verified`, tạo membership theo `iss + sub` và đánh dấu lời mời `ACCEPTED`.
+7. Những lần sau backend chỉ định danh bằng `iss + sub`, không dùng email làm ID.
+
+`qts_admin` có thể mời role client và internal. `client_admin` chỉ có thể mời/quản lý `client_admin`, `client_viewer`, `billing`, `technical` trong tenant của mình.
+
+Khi đổi role hoặc chuyển trạng thái thành `DISABLED`, backend thu hồi session hiện có của membership đó. Người dùng phải đăng nhập lại để nhận quyền mới; tài khoản disabled bị từ chối.
+
+## 13. Hướng dẫn vận hành nghiệp vụ
+
+### 13.1. Khởi tạo khách hàng
+
+1. Đăng nhập bằng `qts_admin` hoặc `account_manager`.
+2. Mở **Khách hàng** > **Thêm khách hàng**.
+3. Nhập tenant ID ổn định, tên doanh nghiệp, gói dịch vụ và liên hệ khẩn cấp.
+4. Cấu hình SLA Critical/High/Medium/Low theo phút.
+5. Chọn tenant ở thanh trên cùng trước khi tạo tài sản, license, ticket, tài liệu hoặc lời mời.
+
+Tenant ID không nên đổi sau khi đi vào vận hành. Dashboard/ticket chỉ có deadline SLA khi tenant đã cấu hình ngưỡng tương ứng.
+
+### 13.2. Quản lý cảnh báo
+
+1. SOC chọn tenant, mở **Cảnh báo** và tạo record từ sự kiện đã được xác minh.
+2. Điền source, external reference, severity, mô tả, tài sản và thời điểm phát hiện.
+3. Chuyển trạng thái theo quy trình tiếp nhận/xử lý.
+4. Dashboard tổng hợp trực tiếp các record này và làm mới mỗi 30 giây.
+
+UI/API hiện hỗ trợ nhập và quản lý cảnh báo, chưa có daemon tự nhận log từ SIEM. Không dùng tài khoản người dùng/session cookie làm service credential cho automation; cần thiết kế service-to-service auth trước khi nối ingestion production.
+
+### 13.3. Ticket và incident
+
+1. Khách hàng hoặc nhân viên có quyền chọn **Tạo ticket**.
+2. Chọn tenant (internal), loại, severity, tiêu đề và mô tả.
+3. Frontend gửi `Idempotency-Key` riêng để tránh tạo trùng khi retry.
+4. SOC cập nhật status, severity, assignee bằng optimistic version.
+5. Dùng comment `CUSTOMER` để trao đổi chung; comment `INTERNAL` chỉ dành cho nhân viên QTS.
+6. Theo dõi `dueAt` và trạng thái vi phạm SLA trên dashboard/danh sách.
+
+Nếu hai người sửa cùng phiên bản, API trả conflict; tải lại record rồi áp dụng thay đổi trên phiên bản mới.
+
+### 13.4. Tài sản và license
+
+1. Tạo inventory tài sản với loại, vendor, identifier, criticality, owner và health.
+2. Cập nhật `lastSeenAt` từ quy trình vận hành đáng tin cậy.
+3. Tạo license với sản phẩm, vendor, số lượng, thời gian hiệu lực và trạng thái.
+4. Dashboard tính sức khỏe tài sản và license sắp hết hạn từ dữ liệu đã lưu.
+
+### 13.5. Hợp đồng và hóa đơn
+
+1. Account manager/QTS admin tạo hợp đồng theo tenant, số hợp đồng, thời hạn và giá trị.
+2. Tạo hóa đơn, kỳ hạn, đơn vị tiền tệ, số tiền và trạng thái.
+3. Cập nhật trạng thái sau khi đối soát ở hệ thống tài chính chính thức.
+
+Module hiện là sổ quản lý nghiệp vụ; chưa kết nối cổng thanh toán hoặc phần mềm kế toán và không tự xử lý giao dịch tiền.
+
+### 13.6. Tài liệu và knowledge base
+
+1. Nhân viên có quyền chọn tenant và tải PDF, TXT hoặc Markdown tối đa 10 MiB.
+2. Backend xác minh media type/nội dung cơ bản, tính SHA-256 và lưu tài liệu.
+3. Download luôn đi qua authorization check và được ghi audit.
+4. Soạn knowledge article, chọn audience `CLIENT`, `INTERNAL` hoặc `ALL`, sau đó chuyển `PUBLISHED` khi đã duyệt.
+
+Production phải bổ sung object storage, malware scanning/CDR, retention và DLP; kiểm tra hiện tại không thay thế antivirus.
+
+### 13.7. Tích hợp và ca trực
+
+1. Tạo integration với loại SIEM/SOAR/EDR/Webhook, endpoint HTTPS và secret tối thiểu 16 ký tự.
+2. Backend mã hóa secret bằng AES-256-GCM; response/UI không trả lại plaintext.
+3. Không đặt credential trong endpoint URL.
+4. Lập ca SOC với kỹ sư, level, thời gian bắt đầu/kết thúc và ghi chú bàn giao.
+
+Integration record hiện là inventory/cấu hình bảo mật, chưa tự gọi endpoint hay đồng bộ dữ liệu.
+
+### 13.8. Audit và điều tra
+
+1. Mở **Audit log** và lọc theo tenant, action, outcome hoặc resource.
+2. Dùng request ID để đối chiếu giữa response, log gateway và audit record.
+3. Bảng audit có trigger chặn `UPDATE`/`DELETE` để giữ append-only ở application database.
+4. Hạn chế quyền truy cập audit vì có thể chứa định danh và metadata vận hành.
+
+Audit database không thay thế hệ thống lưu trữ bất biến/WORM độc lập. Production nên xuất audit sang SIEM/log archive có retention và kiểm soát truy cập riêng.
+
+## 14. API và quy ước gọi
+
+| Method | Path | Mục đích |
+| --- | --- | --- |
+| `GET` | `/api/v1/health`, `/api/v1/ready` | Liveness và database readiness |
+| `GET` | `/api/v1/auth/status` | Trạng thái cấu hình Google OIDC |
+| `GET` | `/api/v1/auth/login/google` | Bắt đầu OIDC Authorization Code Flow |
+| `GET` | `/api/v1/auth/callback/google` | Callback backend |
+| `GET` | `/api/v1/auth/session` | Lấy user, role, tenant, workspace và CSRF token |
+| `POST` | `/api/v1/auth/logout` | Thu hồi session |
+| `GET` | `/api/v1/portal/overview` | Dashboard tổng hợp |
+| `GET`, `POST` | `/api/v1/portal/{resource}` | Danh sách/tạo `alerts`, `tickets`, `assets`, `licenses`, `tenants`, `contracts`, `invoices`, `documents`, `knowledge`, `integrations`, `shifts` |
+| `PATCH` | `/api/v1/portal/{resource}/{id}` | Cập nhật resource hỗ trợ; documents không patch |
+| `GET`, `POST` | `/api/v1/portal/tickets/{id}/comments` | Đọc/thêm trao đổi ticket |
+| `GET` | `/api/v1/portal/documents/{id}/download` | Tải tài liệu sau authorization |
+| `GET`, `PATCH` | `/api/v1/portal/members[/{id}]` | Liệt kê/cập nhật thành viên |
+| `GET`, `POST` | `/api/v1/portal/invitations` | Liệt kê/tạo lời mời |
+| `GET` | `/api/v1/portal/audit` | Tra cứu audit |
+
+Tất cả portal API yêu cầu session cookie. Mutation yêu cầu thêm header `X-CSRF-Token`; tạo ticket yêu cầu `Idempotency-Key` dài 8–128 ký tự. List endpoint hỗ trợ `page`, `pageSize` tối đa 100, `search`, `sortBy`, `sortOrder`, `tenantId` và filter theo resource.
+
+Error envelope thống nhất:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Yêu cầu không hợp lệ.",
+    "details": {}
+  }
+}
+```
+
+Xem hợp đồng chi tiết tại [docs/api/openapi.yaml](docs/api/openapi.yaml).
+
+## 15. Lệnh phát triển và kiểm thử
+
+| Lệnh | Mục đích |
+| --- | --- |
+| `npm run dev:frontend` | Vite dev server có HMR |
+| `npm run dev:backend:env` | Backend watch mode, đọc `backend/.env` |
+| `npm run start:backend:env` | Backend không watch, đọc `backend/.env` |
+| `npm run db:migrate:env --workspace @qts/backend` | Áp dụng migration chưa chạy |
+| `npm run db:rollback:env --workspace @qts/backend` | Lùi đúng một migration; chỉ dùng khi đã đánh giá dữ liệu |
+| `npm run test:frontend` | Frontend tests |
+| `npm run test:backend` | Backend unit/HTTP tests |
+| `npm run test:integration:env --workspace @qts/backend` | PostgreSQL integration test |
+| `npm run typecheck` | TypeScript strict check |
+| `npm run lint` | ESLint frontend và syntax check backend |
+| `npm run build` | Production frontend bundle và backend validation |
+| `npm run check` | Typecheck, lint, toàn bộ unit tests và build |
+| `npm audit --audit-level=moderate` | Dependency advisory gate |
+
+Integration test tạo schema/database test riêng theo cơ chế của test rồi dọn sau khi hoàn tất; không trỏ test vào database production.
+
+## 16. Runbook hệ thống
+
+### 16.1. Khởi động mỗi ngày
+
+```powershell
+docker compose --env-file backend/.env up -d database
 npm run dev:backend:env
 ```
 
-Khởi động frontend ở terminal khác:
+Ở terminal khác:
 
 ```powershell
 npm run dev:frontend
 ```
 
-Mở `http://localhost:5173/`. Không trộn `localhost` và `127.0.0.1` trong quá trình OIDC vì cookie và redirect URI phụ thuộc origin chính xác.
+Xác nhận `/health`, `/ready`, `/auth/status`, sau đó smoke test đăng nhập và một route đúng role.
 
-## 7. Thêm tài khoản đăng nhập
+### 16.2. Dừng local an toàn
 
-### 7.1. Thu thập `iss + sub` cho tài khoản đầu tiên
+Dừng process Node bằng `Ctrl+C`, sau đó:
 
-1. Đặt `QTS_AUTH_MEMBERSHIPS_JSON=[]`.
-2. Nếu chỉ nhận tài khoản QTS, đặt `GOOGLE_WORKSPACE_DOMAIN` đúng domain Google Workspace.
-3. Khởi động backend và frontend.
-4. Người cần cấp quyền chọn Đăng nhập với Google.
-5. Callback sẽ bị từ chối với `MEMBERSHIP_NOT_FOUND`; không có session nào được tạo.
-6. Trong stdout backend, lấy auth event `auth_membership_not_found` gồm `issuer`, `subject` và email đã xác minh.
-7. Xác nhận người yêu cầu qua quy trình nội bộ QTS trước khi thêm membership.
-
-Email trong event chỉ hỗ trợ đối chiếu vận hành. Khóa định danh được lưu và so khớp luôn là `issuer + subject`.
-
-### 7.2. Khai báo membership
-
-Mỗi phần tử trong `QTS_AUTH_MEMBERSHIPS_JSON` có đúng bốn trường:
-
-```json
-{
-  "issuer": "https://accounts.google.com",
-  "subject": "gia-tri-sub-da-xac-minh",
-  "tenantId": "tenant-do-qts-quan-ly",
-  "role": "client_admin"
-}
+```powershell
+docker compose --env-file backend/.env stop database
 ```
 
-Danh sách role được hỗ trợ:
+Không dùng `docker compose down -v` trừ khi chủ đích xóa toàn bộ dữ liệu local trong volume.
 
-| Role | Workspace | Phạm vi dự kiến |
-| --- | --- | --- |
-| `client_admin` | Client | Quản trị tài khoản khách hàng |
-| `client_viewer` | Client | Chỉ xem dữ liệu được cấp |
-| `billing` | Client | Hợp đồng, hóa đơn và subscription |
-| `technical` | Client | Ticket, asset và cấu hình kỹ thuật |
-| `soc_l1` | Internal | Phân tích và xử lý cấp 1 |
-| `soc_l2` | Internal | Phân tích và xử lý cấp 2 |
-| `soc_l3` | Internal | Điều tra và escalation cấp 3 |
-| `account_manager` | Internal | Quản lý account khách hàng |
-| `qts_admin` | Internal | Quản trị hệ thống QTS |
+### 16.3. Backup PostgreSQL local
 
-`tenantId` chỉ chấp nhận chữ, số, dấu chấm, gạch dưới và gạch ngang; tối đa 64 ký tự. Không được trùng cặp `issuer + subject`.
+```powershell
+New-Item -ItemType Directory -Force .\backups
+$qtsDatabaseContainer = docker compose --env-file backend/.env ps -q database
+docker exec $qtsDatabaseContainer pg_dump -U qts -d qts_portal --format=custom --file=/tmp/qts_portal.dump
+docker cp "${qtsDatabaseContainer}:/tmp/qts_portal.dump" .\backups\qts_portal.dump
+```
 
-Sau khi cập nhật membership, khởi động lại backend. Người dùng đăng nhập lại để nhận session chứa tenant/role mới. Session đã phát trước đó không tự đổi quyền giữa vòng đời.
+Thử restore vào database riêng, không ghi đè database đang vận hành:
 
-## 8. Luồng đăng nhập
+```powershell
+docker exec $qtsDatabaseContainer createdb -U qts qts_portal_restore
+docker cp .\backups\qts_portal.dump "${qtsDatabaseContainer}:/tmp/qts_portal_restore.dump"
+docker exec $qtsDatabaseContainer pg_restore -U qts -d qts_portal_restore --clean --if-exists /tmp/qts_portal_restore.dump
+```
 
-1. Frontend gọi `GET /api/v1/auth/status`.
-2. Người dùng mở `GET /api/v1/auth/login/google?returnTo=...`.
-3. Backend sinh `state`, `nonce`, PKCE verifier và S256 challenge mới.
-4. Backend lưu giao dịch một lần trong RAM và đặt cookie giao dịch `HttpOnly`, `SameSite=Lax`.
-5. Browser được chuyển tới Google với `response_type=code` và scope `openid email profile`.
-6. Google chuyển browser về `/api/v1/auth/callback/google`.
-7. Backend so khớp state với cookie, tiêu thụ giao dịch một lần và đổi code bằng PKCE verifier.
-8. `openid-client` xác minh chữ ký/JWKS, issuer, audience, thời hạn và nonce; backend kiểm tra lại các claim bắt buộc.
-9. Backend kiểm tra `email_verified === true` và `hd` khi có `GOOGLE_WORKSPACE_DOMAIN`.
-10. Backend tìm membership bằng `iss + sub`, tạo session ID opaque và CSRF token.
-11. Browser chỉ nhận QTS session cookie. Google ID token/access token không được lưu trong session, localStorage hoặc sessionStorage.
-12. Frontend gọi `GET /api/v1/auth/session` và chỉ hiển thị workspace được backend cấp.
+Production phải dùng backup mã hóa, PITR, retention, restore drill và RPO/RTO do QTS phê duyệt.
 
-## 9. Route và endpoint
+### 16.4. Thu hồi tài khoản
 
-### Frontend
+1. Vào **Thành viên**, chuyển `status` thành `DISABLED` và lưu.
+2. Backend thu hồi session của người dùng.
+3. Kiểm tra audit `members.update` và thử đăng nhập lại.
+4. Nếu tài khoản nằm trong `QTS_AUTH_MEMBERSHIPS_JSON`, xóa entry đó; nếu không, lần restart kế tiếp sẽ bootstrap lại quyền.
+5. Đồng thời vô hiệu hóa tài khoản/2-Step Verification tại Google Workspace khi sự cố yêu cầu.
 
-| Route | Hành vi |
-| --- | --- |
-| `/` | Cổng trạng thái và đăng nhập Google |
-| `/company` | Website công ty QTS |
-| `/client/*` | Yêu cầu session có workspace `client` |
-| `/admin/*` | Yêu cầu session có workspace `internal` |
-| Route khác | `404` |
+### 16.5. Xoay secret
 
-### Backend
+- **Google Client Secret**: tạo secret mới, cập nhật secret manager trên tất cả instance, rolling restart/smoke test, sau đó mới thu hồi secret cũ.
+- **Database credential**: rotate ở PostgreSQL và secret manager theo một change window; cập nhật pool connection, restart và kiểm tra readiness.
+- **`QTS_DATA_ENCRYPTION_KEY`**: không thay trực tiếp khi còn integration secret đã mã hóa. Phải có quy trình giải mã bằng khóa cũ, mã hóa lại bằng khóa mới, kiểm chứng rồi mới thu hồi khóa cũ. Repository chưa cung cấp job rotation tự động.
 
-| Method | Path | Quyền | Mục đích |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/health` | Public | Liveness |
-| `GET` | `/api/v1/ready` | Public | Readiness |
-| `GET` | `/api/v1/auth/status` | Public | Trạng thái cấu hình OIDC, không lộ secret |
-| `GET` | `/api/v1/auth/login/google` | Public, rate limited | Bắt đầu Authorization Code Flow |
-| `GET` | `/api/v1/auth/callback/google` | OIDC transaction | Xác minh callback và tạo session |
-| `GET` | `/api/v1/auth/session` | Session cookie | Trả user display, tenant, role, workspace và CSRF token |
-| `POST` | `/api/v1/auth/logout` | Session + CSRF | Thu hồi session và xóa cookie |
+### 16.6. Theo dõi
 
-Hợp đồng chi tiết: [docs/api/openapi.yaml](docs/api/openapi.yaml).
+- Cảnh báo khi readiness `503`, tỷ lệ `5xx/401/403/429`, latency hoặc restart tăng bất thường.
+- Thu thập stdout lifecycle event và reverse-proxy access log nhưng không log cookie, authorization code, token, CSRF hoặc request body nhạy cảm.
+- Theo dõi PostgreSQL connection, disk, slow query, backup và replication lag ở production.
+- Theo dõi audit outcome `DENIED`/`FAILURE`, role change, account disable và document download.
 
-## 10. Các lệnh vận hành
+## 17. Giới hạn và việc cần làm trước production
 
-| Lệnh | Mục đích |
-| --- | --- |
-| `npm ci` | Cài đúng lockfile |
-| `npm run dev:frontend` | Chạy Vite có HMR |
-| `npm run dev:backend` | Chạy backend không đọc `.env` |
-| `npm run dev:backend:env` | Chạy backend và đọc `backend/.env` |
-| `npm run start:backend` | Chạy backend production-style từ process env |
-| `npm run start:backend:env` | Chạy backend và đọc `backend/.env` |
-| `npm run test:frontend` | Test frontend |
-| `npm run test:backend` | Test backend |
-| `npm run typecheck` | TypeScript strict |
-| `npm run lint` | Lint/syntax toàn repo |
-| `npm run build` | Build frontend và kiểm tra backend |
-| `npm run check` | Typecheck, lint, test và build |
-| `npm audit --audit-level=moderate` | Kiểm tra dependency advisory |
+- Chưa có connector worker/queue để tự ingest SIEM, SOAR, EDR hoặc telemetry khối lượng lớn.
+- Dashboard dùng polling 30 giây; chưa có WebSocket/SSE và freshness SLO.
+- Integration module chỉ lưu cấu hình; chưa gọi webhook hay kiểm tra health tự động.
+- Hóa đơn/hợp đồng chưa kết nối payment gateway, ERP hoặc approval hai người.
+- Lời mời không tự gửi email; QTS phải thông báo qua kênh đã kiểm soát.
+- Tài liệu hiện lưu trong PostgreSQL, tối đa 10 MiB và chưa có antivirus/CDR/DLP/object storage.
+- Chưa có SAML SSO; provider hiện tại là Google OIDC.
+- MFA phải được cưỡng chế tại Google Workspace; portal chưa có step-up authentication cho thao tác đặc quyền.
+- Audit append-only trong cùng database chưa phải WORM/archive độc lập.
+- Compose chỉ dành cho local; production cần managed PostgreSQL HA, TLS, backup/PITR và network policy.
+- Chưa có Elasticsearch; cần đánh giá riêng khi log/search vượt khả năng PostgreSQL.
+- Cần bổ sung service-to-service authentication trước khi cho hệ thống bên ngoài ghi cảnh báo/tài sản.
+- Cần CI secret scan, SAST/SCA/IaC/DAST, load test, accessibility regression, pentest và diễn tập khôi phục trước go-live.
 
-## 11. Kiểm soát bảo mật
-
-- Authorization Code Flow chạy tại backend; client secret không xuất hiện trong bundle.
-- `state` chống login CSRF, `nonce` chống ID token replay, PKCE S256 ràng buộc authorization code.
-- Redirect sau login chỉ chấp nhận đường dẫn cùng origin và đúng workspace được cấp.
-- ID token được xác minh bằng khóa công khai Google qua OIDC discovery/JWKS.
-- `iss`, `aud`, `exp`, `nonce`, `email_verified` và `hd` được kiểm tra fail-closed.
-- Định danh ổn định dùng `iss + sub`; email không được dùng làm primary key.
-- Cookie production dùng tiền tố `__Host-` cho session, `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`.
-- Logout yêu cầu CSRF token gắn với session và dùng so sánh constant-time.
-- Google token bị loại bỏ ngay sau khi lấy claims; session chỉ giữ identity QTS, tenant, role và CSRF token.
-- Login endpoint có rate limit thứ cấp theo địa chỉ client đã chuẩn hóa. Production vẫn phải có rate limit ở reverse proxy/WAF.
-- Backend không tin `X-Forwarded-For` mặc định. Chỉ đặt `QTS_TRUST_PROXY_HOPS` khi backend bị cô lập sau đúng chuỗi proxy đó.
-- Response auth dùng `Cache-Control: no-store`, CSP, frame deny, `nosniff` và referrer policy.
-- Auth audit event không chứa authorization code, ID token, access token, client secret, session ID hoặc CSRF token.
-
-`hd` chứng minh tài khoản thuộc Google Workspace được chỉ định; kiểm tra đuôi email không đủ. Google ID token trong luồng này không cung cấp bằng chứng ứng dụng có thể dùng để khẳng định từng lần đăng nhập đã qua MFA. Nếu QTS bắt buộc MFA, phải cưỡng chế 2-Step Verification bằng chính sách Google Workspace và giám sát tuân thủ ở tầng quản trị danh tính.
-
-## 12. Runbook vận hành
-
-### Khởi động
-
-1. Cấp biến môi trường từ secret manager hoặc `backend/.env` ở local.
-2. Chạy `npm ci` và `npm run check`.
-3. Khởi động backend.
-4. Xác nhận `/api/v1/health`, `/api/v1/ready` và `/api/v1/auth/status` trả `200`.
-5. Khởi động frontend hoặc reverse proxy production.
-6. Xác nhận `/api` đi cùng origin với frontend.
-7. Thực hiện login smoke test bằng tài khoản có membership thật.
-8. Xác nhận cookie có `HttpOnly`, `Secure`, `SameSite=Lax` ở production và browser storage không có Google token.
-
-### Theo dõi
-
-- Thu thập stdout JSON và giới hạn quyền đọc vì event provisioning có email, issuer và subject.
-- Cảnh báo khi `5xx`, `401`, `403`, `429`, latency hoặc process restart tăng bất thường.
-- Theo dõi `auth_membership_not_found`, `auth_login_succeeded`, `auth_logout_succeeded`.
-- Không ghi request header, cookie, authorization code hoặc token vào access log.
-- Rate-limit `/api/v1/auth/login/google` và callback ở WAF/reverse proxy.
-
-### Thay đổi quyền hoặc thu hồi tài khoản
-
-1. Xóa hoặc sửa membership theo `iss + sub`.
-2. Restart backend để nạp cấu hình mới.
-3. Do store hiện ở RAM, restart sẽ thu hồi toàn bộ session trên instance.
-4. Xác nhận tài khoản bị từ chối hoặc nhận role mới sau khi đăng nhập lại.
-5. Ghi nhận người phê duyệt và lý do trong hệ thống quản trị thay đổi của QTS.
-
-### Xoay Google Client Secret
-
-1. Tạo secret mới trên Google Cloud và lưu vào secret manager.
-2. Cập nhật `GOOGLE_CLIENT_SECRET` trên tất cả instance.
-3. Rolling restart và smoke test login.
-4. Thu hồi secret cũ sau khi xác nhận toàn bộ instance dùng secret mới.
-5. Kiểm tra repository, image và log không chứa secret.
-
-### Dừng và rollback
-
-- Development: `Ctrl+C` tại từng terminal.
-- Production: gửi `SIGTERM` và chờ event `api_shutdown_complete`.
-- Rollback frontend và backend theo cùng release đã kiểm thử tương thích contract.
-- Sau rollback, kiểm tra health, auth status, callback URI, cookie và một login thật.
-
-## 13. Giới hạn trước production HA
-
-Session và giao dịch OIDC hiện lưu trong RAM. Hệ quả:
-
-- Restart backend làm mất toàn bộ session và giao dịch đang chờ.
-- Không được chạy nhiều replica sau load balancer nếu chưa có sticky session.
-- Sticky session chỉ là giải pháp tạm; production HA cần shared store như Redis/PostgreSQL với TTL, encryption, backup và giám sát.
-- Membership được nạp từ env lúc khởi động; chưa có UI provisioning hay database RBAC.
-- Auth audit mới ở stdout; chưa đáp ứng yêu cầu append-only/retention/forensic.
-- Chưa có revocation theo từng session từ trang quản trị.
-
-Không go-live portal nghiệp vụ cho đến khi có shared session store, authorization phía server trên từng API, tenant isolation test, audit bền vững, WAF, secret manager, SAST/SCA/secret scan, DAST và pentest.
-
-## 14. Xử lý lỗi thường gặp
+## 18. Xử lý sự cố thường gặp
 
 | Hiện tượng | Nguyên nhân thường gặp | Cách xử lý |
 | --- | --- | --- |
-| `AUTH_NOT_CONFIGURED` | Thiếu toàn bộ cấu hình OIDC | Kiểm tra `/auth/status` và biến backend |
-| Backend dừng khi start | Chỉ cấu hình một phần hoặc env sai | Đọc lỗi tên biến; không bỏ qua validation |
-| `redirect_uri_mismatch` | URI Google Cloud khác `QTS_PUBLIC_ORIGIN` | So khớp scheme, host, port và callback tuyệt đối |
-| Cookie không tồn tại ở local | Mở sai origin hoặc bật `Secure` trên HTTP | Dùng thống nhất `http://localhost:5173` và local-only `Secure=false` |
-| `INVALID_AUTH_TRANSACTION` | State/cookie hết hạn, callback lặp lại hoặc đổi origin | Bắt đầu lại login, không refresh callback |
-| `OIDC_RESPONSE_INVALID` | Code/token/nonce/chữ ký không hợp lệ | Kiểm tra thời gian máy, client và log backend |
-| `HOSTED_DOMAIN_NOT_ALLOWED` | Claim `hd` không khớp | Kiểm tra Google Workspace account và cấu hình domain |
-| `MEMBERSHIP_NOT_FOUND` | Chưa có cặp `iss + sub` | Dùng audit event để cấp đúng membership |
-| Route báo không có quyền | Session thuộc workspace khác | Kiểm tra role mapping phía backend |
-| `429 AUTH_RATE_LIMITED` | Quá nhiều lần bắt đầu login | Chờ `Retry-After`, kiểm tra bot/WAF |
-| Proxy `/api` lỗi | Backend chưa chạy hoặc sai `QTS_API_ORIGIN` | Kiểm tra health trực tiếp rồi kiểm tra Vite proxy |
+| `MEMBERSHIP_NOT_FOUND` | Google account hợp lệ nhưng chưa có membership/lời mời | Lấy `iss + sub` từ audit để bootstrap tài khoản đầu tiên hoặc tạo lời mời qua portal |
+| `INVALID_AUTH_TRANSACTION` | Trộn `localhost`/`127.0.0.1`, cookie cũ, callback lặp lại hoặc transaction hết hạn | Dùng duy nhất `http://localhost:5173`, xóa cookie site local và bắt đầu login mới |
+| Google `redirect_uri_mismatch` | Redirect URI trên Google không khớp tuyệt đối | Đặt đúng `http://localhost:5173/api/v1/auth/callback/google` và `QTS_PUBLIC_ORIGIN` |
+| Auth báo chưa cấu hình | Thiếu Client ID, Client Secret hoặc memberships JSON | Kiểm tra đủ ba biến; mảng `[]` là hợp lệ |
+| Backend không khởi động vì database | Container chưa ready, password/URL lệch hoặc port bị chiếm | Kiểm tra `docker compose ... ps`, log database và hai giá trị password |
+| `QTS_DATA_ENCRYPTION_KEY must decode...` | Khóa không phải Base64 32 byte | Sinh lại bằng lệnh Node ở phần setup; không dùng chuỗi tùy ý |
+| `CSRF_INVALID`/`403` khi mutation | Session cũ hoặc thiếu `X-CSRF-Token` | Tải lại session/đăng nhập lại; API client phải gửi CSRF hiện tại |
+| `VERSION_CONFLICT`/`409` | Record đã được người khác cập nhật | Reload record và gửi lại `expectedVersion` mới |
+| Dashboard toàn số `0` | Database chưa có dữ liệu trong scope | Đây là kết quả thực, không phải lỗi hay dummy data; nhập/integrate dữ liệu hợp lệ |
+| `/ready` trả `503` | PostgreSQL không truy cập được | Kiểm tra connection, pool, TLS/CA và sức khỏe database |
 
-## 15. Tài liệu liên quan
+## 19. Quy tắc bảo mật bắt buộc
 
-- [Backend](backend/README.md)
-- [Frontend](frontend/README.md)
-- [OpenAPI](docs/api/openapi.yaml)
-- [ADR-004: Google OIDC và server session](docs/decisions/ADR-004-google-oidc-and-server-session.md)
-- [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect)
-- [Google: Verify the ID token](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
-- [Google OAuth 2.0 Web Server](https://developers.google.com/identity/protocols/oauth2/web-server)
-- [openid-client](https://github.com/panva/openid-client)
+- Không commit `.env`, secret, token, database dump hoặc dữ liệu khách hàng.
+- Không đưa Google token/session vào `localStorage` hoặc `sessionStorage`.
+- Không dùng email làm primary identity; luôn dùng `iss + sub` sau provisioning.
+- Không tin role/tenant do browser gửi; backend lấy từ session/membership.
+- Không thêm dummy data hoặc fallback local khi API lỗi.
+- Không mở CORS wildcard cho credentialed API; frontend và `/api` nên cùng public origin.
+- Production bắt buộc HTTPS, cookie `Secure`, HSTS, WAF/rate limit và secret manager.
+- Mọi thay đổi schema phải có migration, test integration và kế hoạch rollback/backup.
+
+Tài liệu chi tiết theo workspace: [backend/README.md](backend/README.md), [frontend/README.md](frontend/README.md). Các quyết định kiến trúc nằm trong [docs/decisions](docs/decisions), hợp đồng API tại [docs/api/openapi.yaml](docs/api/openapi.yaml).

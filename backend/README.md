@@ -1,179 +1,177 @@
 # QTS Portal Backend
 
-Backend Node.js chịu trách nhiệm toàn bộ Google OpenID Connect, ánh xạ tenant/role, session cookie, CSRF và API hạ tầng. Frontend không sở hữu credential hoặc token Google.
+Backend Node.js là ranh giới bảo mật và nguồn quyết định quyền của QTS Portal. Service xử lý Google OIDC, session/CSRF, tenant RBAC, validation, persistence PostgreSQL và audit cho cả Client Portal lẫn Internal Portal.
 
-## Phạm vi
+Hướng dẫn setup và runbook đầy đủ nằm tại [README gốc](../README.md).
 
-- Health và readiness.
-- Google Authorization Code Flow với `openid email profile`.
-- `state`, `nonce` và PKCE S256 mới cho từng lần đăng nhập.
-- Callback `/api/v1/auth/callback/google`.
-- Xác minh ID token bằng `openid-client` và JWKS của Google.
-- Kiểm tra lại `iss`, `aud`, `exp`, `nonce`, `email_verified`, `hd`.
-- Membership allowlist dùng cặp `issuer + subject`.
-- Opaque session ID trong cookie HttpOnly.
-- CSRF token cho logout.
-- Auth audit event dạng JSON trên stdout.
+## Trách nhiệm
 
-Backend chưa có API SOC/ticket/asset/billing, database, shared session store hoặc audit store bền vững.
+- Google Authorization Code Flow với `openid email profile`, `state`, `nonce` và PKCE S256.
+- Xác minh chữ ký ID token/JWKS, `iss`, `aud`, `exp`, `nonce`, `email_verified` và `hd` khi cấu hình.
+- Định danh người dùng bằng `iss + sub`; email chỉ dùng để khớp lời mời lần đầu.
+- Opaque session và OIDC transaction được băm/lưu trong PostgreSQL.
+- Session cookie HttpOnly, Secure ở production, SameSite=Lax; mutation cần CSRF token.
+- Deny-by-default RBAC và tenant scope lấy từ session.
+- PostgreSQL Row-Level Security cho dữ liệu tenant.
+- Validation allowlist, body-size limit, pagination, idempotency và optimistic concurrency.
+- Audit append-only cho auth, mutation đặc quyền và download tài liệu.
+- Mã hóa secret tích hợp bằng AES-256-GCM.
 
 ## Cấu trúc
 
 ```text
 backend/
 |-- .env.example
+|-- migrations/                  # SQL up/down
+|-- integration/                 # PostgreSQL integration tests
+|-- scripts/
+|   |-- check-js.js
+|   `-- database.js
 |-- src/
-|   |-- app.js           # HTTP routing, cookie parsing, error response, rate limit
-|   |-- auth-config.js   # Env validation, role/workspace và membership
-|   |-- auth-service.js  # Transaction, claims, session và CSRF
-|   |-- auth-store.js    # Store TTL trong RAM
-|   |-- google-oidc.js   # Adapter openid-client
-|   `-- server.js        # Process lifecycle và wiring
-`-- test/                # Config, HTTP, service, OIDC adapter và probe tests
+|   |-- app.js                   # HTTP router, cookie, CSRF, limits
+|   |-- auth-config.js           # Env/OIDC/role validation
+|   |-- auth-service.js          # Login, claims, session, logout
+|   |-- auth-store.js            # PostgreSQL expiring record store
+|   |-- google-oidc.js           # openid-client adapter
+|   |-- database.js              # Pool và scoped transaction
+|   |-- membership-repository.js # Bootstrap/invitation identity
+|   |-- portal-policy.js         # Permission và tenant scope
+|   |-- portal-schema.js         # Input/query contracts
+|   |-- portal-service.js        # Use-case authorization
+|   |-- portal-repository.js     # SQL, audit, RLS scope
+|   |-- secret-crypto.js         # AES-256-GCM
+|   `-- server.js                # Wiring, migration, lifecycle
+`-- test/                        # Unit và HTTP tests
 ```
 
 ## Chạy backend
 
-Không đọc file `.env`:
+Từ thư mục gốc repository:
 
 ```powershell
-npm run dev:backend
-```
-
-Đọc `backend/.env`:
-
-```powershell
+docker compose --env-file backend/.env up -d database
+npm run db:migrate:env --workspace @qts/backend
 npm run dev:backend:env
 ```
+
+Backend mặc định lắng nghe `http://127.0.0.1:8080`. `server.js` tự áp dụng migration chưa chạy trước khi nhận traffic.
 
 Chế độ không watch:
 
 ```powershell
-npm run start:backend
 npm run start:backend:env
 ```
 
-Mặc định backend lắng nghe tại `http://127.0.0.1:8080`.
+Không đọc file `.env`, phù hợp khi deployment platform inject process environment:
 
-## Biến môi trường
-
-| Biến | Mặc định | Validation |
-| --- | --- | --- |
-| `QTS_API_HOST` | `127.0.0.1` | Host backend |
-| `QTS_API_PORT` | `8080` | Số nguyên `1..65535` |
-| `QTS_TRUST_PROXY_HOPS` | `0` | `0..10`; số reverse proxy tin cậy trước backend |
-| `QTS_PUBLIC_ORIGIN` | `http://127.0.0.1:5173` | Origin tuyệt đối, không path/query/hash; HTTPS ở production |
-| `QTS_AUTH_COOKIE_SECURE` | Theo protocol origin | Production bắt buộc `true` |
-| `GOOGLE_CLIENT_ID` | Không có | Bắt buộc khi bật auth |
-| `GOOGLE_CLIENT_SECRET` | Không có | Bắt buộc; chỉ backend được đọc |
-| `GOOGLE_OIDC_ISSUER` | `https://accounts.google.com` | Không cho đổi sang issuer khác |
-| `GOOGLE_WORKSPACE_DOMAIN` | Không giới hạn | Nếu có, claim `hd` phải khớp |
-| `QTS_AUTH_MEMBERSHIPS_JSON` | Không có | Mảng JSON, có thể là `[]` để bootstrap fail-closed |
-| `QTS_AUTH_TRANSACTION_TTL_SECONDS` | `600` | `120..900` |
-| `QTS_SESSION_TTL_SECONDS` | `28800` | `900..86400` |
-
-Nếu không có bất kỳ cấu hình Google nào, auth ở trạng thái disabled. Nếu chỉ có một phần cấu hình, process từ chối khởi động.
-
-Membership schema:
-
-```json
-[
-  {
-    "issuer": "https://accounts.google.com",
-    "subject": "google-sub-da-xac-minh",
-    "tenantId": "tenant-do-qts-quan-ly",
-    "role": "soc_l1"
-  }
-]
+```powershell
+npm run start:backend
 ```
 
-Không thêm `email` vào membership. Parser từ chối field ngoài `issuer`, `subject`, `tenantId`, `role` để tránh vô tình dùng email làm ID.
+## Database
+
+Migration hiện có:
+
+| Migration | Nội dung |
+| --- | --- |
+| `001_core` | Tenant, membership, auth record, asset, license, alert, ticket/comment, contract, invoice, document, knowledge, integration, shift, audit và RLS |
+| `002_sla_and_knowledge_policy` | SLA theo severity và audience policy cho knowledge |
+| `003_membership_management` | UUID/version phục vụ cập nhật thành viên |
+| `004_internal_invitations` | Lời mời role client/internal với constraint role-workspace |
+| `005_runtime_database_role` | Role runtime `qts_app` không đặc quyền và quyền DML tối thiểu cho RLS |
+
+Mọi repository operation chạy trong transaction, hạ quyền bằng `SET LOCAL ROLE qts_app`, rồi đặt `qts.tenant_id` và `qts.internal_access`. Client scope không thể yêu cầu tenant khác; internal scope chỉ cross-tenant sau khi backend permission cho phép. Integration test còn truy cập các UUID đã biết của tenant khác để xác minh API vẫn trả `404` thay vì dựa vào việc ID khó đoán.
+
+Local dùng owner `qts` từ Compose và hạ quyền trong transaction. Production bắt buộc tách hai connection:
+
+- `QTS_DATABASE_URL`: role đăng nhập `qts_app`, không `SUPERUSER`, không `BYPASSRLS`, chỉ dùng cho runtime.
+- `QTS_MIGRATION_DATABASE_URL`: owner/DDL credential, chỉ dùng lúc startup/release migration.
+
+Migration tạo `qts_app` ở trạng thái `NOLOGIN`; DBA phải cấp `LOGIN` và password runtime bằng công cụ quản trị/secret manager. Backend production kiểm tra role thực tế và dừng ngay nếu cấu hình URL runtime đặc quyền hoặc thiếu URL migration.
+
+Lùi đúng một migration:
+
+```powershell
+npm run db:rollback:env --workspace @qts/backend
+```
+
+Chỉ rollback sau khi backup và đọc file `.down.sql`; một số migration từ chối rollback nếu dữ liệu hiện tại không tương thích.
 
 ## Endpoint
 
-| Method | Path | Thành công | Lỗi chính |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/health` | `200` | `405` |
-| `GET` | `/api/v1/ready` | `200` | `503`, `405` |
-| `GET` | `/api/v1/auth/status` | `200` | `405` |
-| `GET` | `/api/v1/auth/login/google` | `302` | `400`, `429`, `503` |
-| `GET` | `/api/v1/auth/callback/google` | `303` | `400`, `401`, `403`, `503` |
-| `GET` | `/api/v1/auth/session` | `200` | `401` |
-| `POST` | `/api/v1/auth/logout` | `204` | `401`, `403` |
+### Infrastructure và auth
+
+| Method | Path |
+| --- | --- |
+| `GET` | `/api/v1/health` |
+| `GET` | `/api/v1/ready` |
+| `GET` | `/api/v1/auth/status` |
+| `GET` | `/api/v1/auth/login/google` |
+| `GET` | `/api/v1/auth/callback/google` |
+| `GET` | `/api/v1/auth/session` |
+| `POST` | `/api/v1/auth/logout` |
+
+### Portal
+
+| Pattern | Resource/hành vi |
+| --- | --- |
+| `GET /api/v1/portal/overview` | Dashboard tổng hợp |
+| `GET,POST /api/v1/portal/{resource}` | alerts, tickets, assets, licenses, tenants, contracts, invoices, documents, knowledge, integrations, shifts |
+| `PATCH /api/v1/portal/{resource}/{id}` | Cập nhật resource, trừ documents |
+| `GET,POST /api/v1/portal/tickets/{id}/comments` | Ticket conversation |
+| `GET /api/v1/portal/documents/{id}/download` | Authorized download |
+| `GET,PATCH /api/v1/portal/members[/{id}]` | Membership management |
+| `GET,POST /api/v1/portal/invitations` | Invitation provisioning |
+| `GET /api/v1/portal/audit` | Audit search |
+
+Contract đầy đủ: [OpenAPI](../docs/api/openapi.yaml).
+
+## Quy ước request
+
+- Portal endpoint cần session cookie cùng origin.
+- `POST`/`PATCH` cần `X-CSRF-Token` khớp session.
+- Tạo ticket cần `Idempotency-Key` dài 8–128 ký tự thuộc `[A-Za-z0-9._:-]`.
+- List hỗ trợ `page`, `pageSize <= 100`, `search`, sort, filter và `tenantId` theo quyền.
+- Mutation update cần `expectedVersion`; version cũ trả `409`.
+- JSON thường tối đa 1 MiB; document JSON tối đa 14 MiB để mang file Base64 tối đa 10 MiB.
+- Response có `X-Request-Id`; auth/portal response nhạy cảm dùng `Cache-Control: no-store`.
 
 Error envelope:
 
 ```json
 {
   "error": {
-    "code": "MEMBERSHIP_NOT_FOUND",
-    "message": "Tài khoản chưa được cấp tenant và role trên QTS Portal."
+    "code": "PERMISSION_DENIED",
+    "message": "Tài khoản không có quyền thực hiện thao tác này."
   }
 }
 ```
 
-Contract đầy đủ: [OpenAPI](../docs/api/openapi.yaml).
+## Bảo mật dữ liệu
 
-## Cookie
-
-Production session cookie:
-
-- Tên `__Host-qts_session`.
-- `Path=/` và không có `Domain`.
-- `HttpOnly`, `Secure`, `SameSite=Lax`, `Priority=High`.
-- Giá trị là random opaque ID 256 bit; không phải Google token hay JWT chứa claims.
-
-Transaction cookie dùng tên `__Secure-qts_oidc_tx`, chỉ áp dụng cho callback path và hết hạn sau tối đa 15 phút. Local HTTP dùng tên không có secure prefix và chỉ được phép ngoài production.
-
-## Audit auth
-
-Các event hiện có:
-
-- `auth_membership_not_found`: issuer, subject và email đã xác minh để provisioning.
-- `auth_login_succeeded`: issuer, subject, tenant và role.
-- `auth_logout_succeeded`: issuer, subject, tenant và role.
-- Lifecycle: `api_started`, `api_shutdown_started`, `api_shutdown_complete`.
-
-Không event nào chứa authorization code, Google token, client secret, session ID hoặc CSRF token. Stdout vẫn chứa dữ liệu định danh; chỉ hệ thống log được ủy quyền mới được đọc.
+- Google Client Secret không bao giờ được trả cho frontend.
+- Google token được loại bỏ sau khi lấy claims; session không lưu ID/access token.
+- Cookie production là `__Host-qts_session`; transaction cookie là `__Secure-qts_oidc_tx`.
+- Integration secret mã hóa trước khi ghi DB và không xuất hiện trong list/detail response.
+- Document download kiểm tra permission/tenant và ghi audit.
+- Audit table có trigger chặn update/delete.
+- Production yêu cầu `QTS_DATABASE_SSL=true`, HTTPS public origin, secure cookie, runtime role `qts_app` và migration credential riêng.
 
 ## Kiểm thử
 
 ```powershell
 npm run test:backend
+npm run test:integration:env --workspace @qts/backend
 npm run lint:backend
 npm run build:backend
 ```
 
-Test bao phủ:
+Integration tests xác minh migration, RLS chéo tenant, ticket idempotency và audit append-only trên PostgreSQL thực.
 
-- Cấu hình disabled/partial/production HTTPS.
-- Role hợp lệ và cấm mapping bằng email.
-- State, nonce, PKCE S256 và scope.
-- Callback một lần, claim validation và hosted domain.
-- Mapping `iss + sub` và từ chối account chưa cấp quyền.
-- Session cookie không chứa Google token/subject.
-- CSRF logout, cookie parsing, redirect và rate limit.
-- Health/readiness/security headers/404/405.
+## Giới hạn cần lưu ý
 
-## Vận hành
-
-1. Cấp secret qua secret manager; không bake vào image.
-2. Chạy quality gate trước deploy.
-3. Chạy backend sau reverse proxy có TLS và WAF.
-4. Chỉ proxy `/api/*`; không bật CORS wildcard.
-5. Theo dõi auth event, `4xx/5xx`, latency và restart.
-6. Gửi `SIGTERM` khi deploy và chờ shutdown hoàn tất.
-7. Bảo vệ stdout log như dữ liệu định danh.
-8. Dùng shared session/transaction store trước khi chạy nhiều replica.
-
-Rate limiter mặc định dùng địa chỉ kết nối trực tiếp. Khi backend chỉ có thể được gọi qua một chuỗi reverse proxy đã kiểm soát, đặt `QTS_TRUST_PROXY_HOPS` đúng số hop để lấy IP từ phía phải của `X-Forwarded-For`. Cấu hình sai có thể cho phép giả mạo IP hoặc gom mọi người dùng vào một bucket. Reverse proxy/WAF vẫn phải áp dụng rate limit chính theo IP client.
-
-## Giới hạn
-
-- Store trong RAM mất dữ liệu khi restart.
-- Membership chỉ nạp lúc process start.
-- Không có endpoint revoke một session riêng lẻ.
-- Readiness chưa kiểm tra Google hay shared dependency.
-- Chưa có authorization middleware cho API nghiệp vụ vì các API đó chưa tồn tại.
-
-Không triển khai nhiều replica hoặc mở dữ liệu khách hàng cho đến khi các giới hạn này được xử lý.
+- Chưa có service credential/worker ingestion cho SIEM/EDR.
+- Chưa có job xoay lại toàn bộ integration secret khi đổi encryption key.
+- Document chưa qua antivirus/CDR và hiện lưu trong PostgreSQL.
+- Audit cùng database chưa thay thế WORM archive độc lập.
+- Rate limiter login trong process chỉ là lớp phụ; production vẫn cần WAF/gateway rate limit.

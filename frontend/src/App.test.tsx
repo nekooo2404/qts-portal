@@ -47,6 +47,38 @@ function mockAuth({
     if (url === '/api/v1/auth/logout' && init?.method === 'POST') {
       return new Response(null, { status: 204 });
     }
+    if (url.startsWith('/api/v1/portal/overview')) {
+      return new Response(JSON.stringify({
+        data: {
+          scope: { kind: 'TENANT', id: session?.authorization.tenantId ?? 'tenant-001', name: 'Tenant kiểm thử' },
+          metrics: {
+            openAlerts: 0, criticalAlerts: 0, activeTickets: 0, slaBreached: 0,
+            totalAssets: 0, healthyAssets: 0, expiringLicenses: 0, unpaidInvoices: 0,
+          },
+          severityBreakdown: [], assetHealth: [],
+          threatSeries: [
+            { day: '2026-08-03T00:00:00.000Z', critical: 0, high: 0, medium: 0, low: 0 },
+          ],
+          recentAlerts: [], recentTickets: [], generatedAt: '2026-08-03T08:00:00.000Z',
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (
+      url.startsWith('/api/v1/portal/tenants') ||
+      url.startsWith('/api/v1/portal/tickets') ||
+      url.startsWith('/api/v1/portal/alerts') ||
+      url.startsWith('/api/v1/portal/assets')
+    ) {
+      if (url.startsWith('/api/v1/portal/tickets') && init?.method === 'POST') {
+        return new Response(JSON.stringify({ data: { id: 'ticket-001', reference: 'QTS-1', version: 1 } }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({
+        data: [], pagination: { page: 1, pageSize: 100, totalItems: 0, totalPages: 0 },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
     throw new Error(`Unexpected fetch: ${url}`);
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -229,11 +261,63 @@ describe('QTS portal', () => {
     renderAt('/client/overview');
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Client Portal đã xác thực' }),
+      await screen.findByRole('heading', { level: 1, name: 'Tổng quan an ninh' }),
     ).toBeInTheDocument();
     expect(screen.getByText('client_admin')).toBeInTheDocument();
     expect(screen.getByText('tenant-001')).toBeInTheDocument();
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText('0 cảnh báo đang mở')).toBeInTheDocument();
+    expect(screen.getByText(/số 0 là kết quả truy vấn thực tế/i)).toBeInTheDocument();
+  });
+
+  it('sends CSRF and an idempotency key when a client creates a ticket', async () => {
+    const fetchMock = mockAuth({
+      configured: true,
+      session: {
+        user: { email: 'client@example.vn', displayName: 'Client Admin' },
+        authorization: { tenantId: 'tenant-001', role: 'client_admin', workspace: 'client' },
+        csrfToken: 'csrf-001',
+        expiresAt: '2026-08-03T16:00:00.000Z',
+      },
+    });
+    const user = userEvent.setup();
+    renderAt('/client/tickets');
+
+    await user.click(await screen.findByRole('button', { name: 'Tạo ticket' }));
+    await user.type(screen.getByRole('textbox', { name: 'Tiêu đề' }), 'Mất kết nối VPN');
+    await user.type(screen.getByRole('textbox', { name: 'Mô tả chi tiết' }), 'Không thể kết nối VPN từ văn phòng.');
+    await user.click(screen.getByRole('button', { name: 'Gửi ticket' }));
+
+    expect(await screen.findByText('Đã tạo QTS-1.')).toBeInTheDocument();
+    const call = fetchMock.mock.calls.find(([input, init]) => (
+      String(input) === '/api/v1/portal/tickets' && init?.method === 'POST'
+    ));
+    expect(call).toBeDefined();
+    const headers = call?.[1]?.headers as Record<string, string>;
+    expect(headers['X-CSRF-Token']).toBe('csrf-001');
+    expect(headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('resets resource state when an internal user changes portal modules', async () => {
+    mockAuth({
+      configured: true,
+      session: {
+        user: { email: 'admin@qts.com.vn', displayName: 'QTS Admin' },
+        authorization: { tenantId: 'qts-vn', role: 'qts_admin', workspace: 'internal' },
+        csrfToken: 'csrf-001',
+        expiresAt: '2026-08-03T16:00:00.000Z',
+      },
+    });
+    const user = userEvent.setup();
+    renderAt('/admin/alerts');
+
+    await user.click(await screen.findByRole('button', { name: 'Ghi nhận cảnh báo' }));
+    expect(screen.getByRole('heading', { level: 2, name: 'Ghi nhận cảnh báo' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('link', { name: 'Tài sản' }));
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Tài sản được bảo vệ' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Ghi nhận cảnh báo' })).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/admin/assets');
   });
 
   it('denies a client session from entering the internal workspace', async () => {

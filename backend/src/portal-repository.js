@@ -349,6 +349,12 @@ function selectColumns(definition, includeTenantName) {
   return selected.join(", ");
 }
 
+function tenantCondition(scope, parameters, column = "tenant_id") {
+  if (!scope.tenantId) return "";
+  parameters.push(scope.tenantId);
+  return ` AND ${column} = $${parameters.length}`;
+}
+
 async function appendAudit(client, { actor, context, action, resource, resourceId, tenantId, metadata }) {
   const address = context?.ipAddress;
   await client.query(
@@ -577,6 +583,10 @@ export function createPortalRepository(database, { secretCipher } = {}) {
 
     async createTicket({ actor, context, data, idempotencyKey, scope }) {
       return withDatabaseScope(database, scope, async (client) => {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))",
+          [data.tenantId, idempotencyKey],
+        );
         const fingerprint = fingerprintTicket(data, actor);
         const existing = await client.query(
           `SELECT ${RESOURCE_DEFINITIONS.tickets.columns.join(", ")}, request_fingerprint
@@ -722,12 +732,14 @@ export function createPortalRepository(database, { secretCipher } = {}) {
 
     async getDocument({ actor, context, id, scope }) {
       return withDatabaseScope(database, scope, async (client) => {
+        const parameters = [id];
+        const tenantClause = tenantCondition(scope, parameters);
         const result = await client.query(
           `SELECT id, tenant_id, title, filename, media_type, byte_size,
                   content_sha256, content
            FROM documents
-           WHERE id = $1`,
-          [id],
+           WHERE id = $1${tenantClause}`,
+          parameters,
         );
         if (result.rowCount === 0) portalFail(404, "DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu.");
         const row = result.rows[0];
@@ -809,17 +821,25 @@ export function createPortalRepository(database, { secretCipher } = {}) {
           );
         }
         values.push(id, data.expectedVersion);
+        const idIndex = values.length - 1;
+        const versionIndex = values.length;
+        const tenantClause = tenantCondition(scope, values);
         const result = await client.query(
           `UPDATE integrations
            SET ${assignments.join(", ")}, version = version + 1, updated_at = CURRENT_TIMESTAMP
-           WHERE id = $${values.length - 1} AND version = $${values.length}
+           WHERE id = $${idIndex} AND version = $${versionIndex}${tenantClause}
            RETURNING id, tenant_id, name, type, endpoint_url, status, secret_hint,
                      (secret_ciphertext IS NOT NULL) AS has_secret,
                      last_checked_at, version, created_at, updated_at`,
           values,
         );
         if (result.rowCount === 0) {
-          const existing = await client.query("SELECT version FROM integrations WHERE id = $1", [id]);
+          const existingParameters = [id];
+          const existingTenantClause = tenantCondition(scope, existingParameters);
+          const existing = await client.query(
+            `SELECT version FROM integrations WHERE id = $1${existingTenantClause}`,
+            existingParameters,
+          );
           if (existing.rowCount > 0) portalFail(409, "VERSION_CONFLICT", "Tích hợp đã thay đổi; hãy tải lại.");
           portalFail(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tích hợp.");
         }
@@ -842,15 +862,20 @@ export function createPortalRepository(database, { secretCipher } = {}) {
 
     async listTicketComments({ actor, id, scope }) {
       return withDatabaseScope(database, scope, async (client) => {
-        const ticket = await client.query("SELECT id FROM tickets WHERE id = $1", [id]);
+        const ticketParameters = [id];
+        const ticketTenantClause = tenantCondition(scope, ticketParameters);
+        const ticket = await client.query(
+          `SELECT id, tenant_id FROM tickets WHERE id = $1${ticketTenantClause}`,
+          ticketParameters,
+        );
         if (ticket.rowCount === 0) portalFail(404, "TICKET_NOT_FOUND", "Không tìm thấy ticket.");
         const result = await client.query(
           `SELECT id, ticket_id, author_name, visibility, body, created_at
            FROM ticket_comments
-           WHERE ticket_id = $1
+           WHERE ticket_id = $1 AND tenant_id = $2
              ${actor.authorization.workspace === "client" ? "AND visibility = 'CUSTOMER'" : ""}
            ORDER BY created_at ASC, id ASC`,
-          [id],
+          [id, ticket.rows[0].tenant_id],
         );
         return result.rows.map(serializeDatabaseRow);
       });
@@ -859,9 +884,11 @@ export function createPortalRepository(database, { secretCipher } = {}) {
     async createTicketComment({ actor, context, data, id, scope }) {
       const commentId = randomUUID();
       return withDatabaseScope(database, scope, async (client) => {
+        const ticketParameters = [id];
+        const ticketTenantClause = tenantCondition(scope, ticketParameters);
         const ticket = await client.query(
-          "SELECT tenant_id FROM tickets WHERE id = $1 FOR UPDATE",
-          [id],
+          `SELECT tenant_id FROM tickets WHERE id = $1${ticketTenantClause} FOR UPDATE`,
+          ticketParameters,
         );
         if (ticket.rowCount === 0) portalFail(404, "TICKET_NOT_FOUND", "Không tìm thấy ticket.");
         const result = await client.query(
@@ -886,8 +913,8 @@ export function createPortalRepository(database, { secretCipher } = {}) {
             `UPDATE tickets
              SET first_response_at = COALESCE(first_response_at, CURRENT_TIMESTAMP),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $1`,
-            [id],
+             WHERE id = $1 AND tenant_id = $2`,
+            [id, ticket.rows[0].tenant_id],
           );
         }
         await appendAudit(client, {
@@ -952,10 +979,12 @@ export function createPortalRepository(database, { secretCipher } = {}) {
 
     async updateMember({ actor, context, data, id, scope, workspaceForRole }) {
       return withDatabaseScope(database, scope, async (client) => {
+        const existingParameters = [id];
+        const tenantClause = tenantCondition(scope, existingParameters);
         const existing = await client.query(
           `SELECT id, issuer, subject, tenant_id, role, workspace, status, version
-           FROM memberships WHERE id = $1 FOR UPDATE`,
-          [id],
+           FROM memberships WHERE id = $1${tenantClause} FOR UPDATE`,
+          existingParameters,
         );
         if (existing.rowCount === 0) portalFail(404, "MEMBER_NOT_FOUND", "Không tìm thấy thành viên.");
         const member = existing.rows[0];
@@ -975,10 +1004,10 @@ export function createPortalRepository(database, { secretCipher } = {}) {
           `UPDATE memberships
            SET role = $2, workspace = $3, status = $4,
                version = version + 1, updated_at = CURRENT_TIMESTAMP
-           WHERE id = $1 AND version = $5
+           WHERE id = $1 AND version = $5 AND tenant_id = $6
            RETURNING id, tenant_id, email, display_name, role, workspace,
                      status, last_login_at, version, created_at`,
-          [id, role, workspaceForRole(role), status, data.expectedVersion],
+          [id, role, workspaceForRole(role), status, data.expectedVersion, member.tenant_id],
         );
         if (data.role || data.status === "DISABLED") {
           await client.query(
@@ -1104,11 +1133,11 @@ export function createPortalRepository(database, { secretCipher } = {}) {
           const statusIndex = entries.findIndex(([key]) => key === "status") + 1;
           assignments.push(
             `first_response_at = CASE
-               WHEN $${statusIndex} IN ('ACKNOWLEDGED', 'IN_PROGRESS')
+               WHEN $${statusIndex}::varchar IN ('ACKNOWLEDGED', 'IN_PROGRESS')
                THEN COALESCE(first_response_at, CURRENT_TIMESTAMP)
                ELSE first_response_at END`,
             `resolved_at = CASE
-               WHEN $${statusIndex} IN ('RESOLVED', 'CLOSED')
+               WHEN $${statusIndex}::varchar IN ('RESOLVED', 'CLOSED')
                THEN COALESCE(resolved_at, CURRENT_TIMESTAMP)
                ELSE NULL END`,
           );
@@ -1117,11 +1146,11 @@ export function createPortalRepository(database, { secretCipher } = {}) {
           const statusIndex = entries.findIndex(([key]) => key === "status") + 1;
           assignments.push(
             `acknowledged_at = CASE
-               WHEN $${statusIndex} = 'ACKNOWLEDGED'
+               WHEN $${statusIndex}::varchar = 'ACKNOWLEDGED'
                THEN COALESCE(acknowledged_at, CURRENT_TIMESTAMP)
                ELSE acknowledged_at END`,
             `resolved_at = CASE
-               WHEN $${statusIndex} = 'RESOLVED'
+               WHEN $${statusIndex}::varchar = 'RESOLVED'
                THEN COALESCE(resolved_at, CURRENT_TIMESTAMP)
                ELSE NULL END`,
           );
@@ -1130,7 +1159,7 @@ export function createPortalRepository(database, { secretCipher } = {}) {
           const statusIndex = entries.findIndex(([key]) => key === "status") + 1;
           assignments.push(
             `published_at = CASE
-               WHEN $${statusIndex} = 'PUBLISHED'
+               WHEN $${statusIndex}::varchar = 'PUBLISHED'
                THEN COALESCE(published_at, CURRENT_TIMESTAMP)
                ELSE published_at END`,
           );
@@ -1139,25 +1168,31 @@ export function createPortalRepository(database, { secretCipher } = {}) {
           const statusIndex = entries.findIndex(([key]) => key === "status") + 1;
           assignments.push(
             `paid_at = CASE
-               WHEN $${statusIndex} = 'PAID'
+               WHEN $${statusIndex}::varchar = 'PAID'
                THEN COALESCE(paid_at, CURRENT_TIMESTAMP)
                ELSE paid_at END`,
           );
         }
         values.push(id, expectedVersion);
+        const idIndex = values.length - 1;
+        const versionIndex = values.length;
+        const tenantColumn = definition.tenantColumn ?? "tenant_id";
+        const tenantClause = tenantCondition(scope, values, tenantColumn);
         const result = await client.query(
           `UPDATE ${definition.table}
            SET ${assignments.join(", ")},
                version = version + 1,
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $${values.length - 1} AND version = $${values.length}
+           WHERE id = $${idIndex} AND version = $${versionIndex}${tenantClause}
            RETURNING ${definition.columns.join(", ")}`,
           values,
         );
         if (result.rowCount === 0) {
+          const existingParameters = [id];
+          const existingTenantClause = tenantCondition(scope, existingParameters, tenantColumn);
           const existing = await client.query(
-            `SELECT version FROM ${definition.table} WHERE id = $1`,
-            [id],
+            `SELECT version FROM ${definition.table} WHERE id = $1${existingTenantClause}`,
+            existingParameters,
           );
           if (existing.rowCount > 0) {
             portalFail(409, "VERSION_CONFLICT", "Tài nguyên đã thay đổi; hãy tải lại trước khi cập nhật.");

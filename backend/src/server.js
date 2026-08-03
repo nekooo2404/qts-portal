@@ -5,9 +5,11 @@ import { readAuthConfig } from "./auth-config.js";
 import { createAuthService } from "./auth-service.js";
 import { createPostgresExpiringStore } from "./auth-store.js";
 import {
+  assertRuntimeDatabaseRole,
   checkDatabaseReady,
   createDatabase,
   readDatabaseConfig,
+  readMigrationDatabaseConfig,
 } from "./database.js";
 import { createGoogleOidcClient } from "./google-oidc.js";
 import {
@@ -61,7 +63,28 @@ export async function createApiServer({ environment = process.env } = {}) {
   const serverConfig = readServerConfig(environment);
   const authConfig = readAuthConfig(environment);
   const database = createDatabase(readDatabaseConfig(environment));
-  await runMigrations(database);
+  const migrationConfig = readMigrationDatabaseConfig(environment);
+  if (environment.NODE_ENV === "production" && !migrationConfig) {
+    await database.end();
+    throw new Error("QTS_MIGRATION_DATABASE_URL is required in production.");
+  }
+  const migrationDatabase = migrationConfig ? createDatabase(migrationConfig) : database;
+  try {
+    await runMigrations(migrationDatabase);
+  } catch (error) {
+    await database.end();
+    throw error;
+  } finally {
+    if (migrationDatabase !== database) await migrationDatabase.end();
+  }
+  try {
+    await assertRuntimeDatabaseRole(database, {
+      requireDedicated: environment.NODE_ENV === "production",
+    });
+  } catch (error) {
+    await database.end();
+    throw error;
+  }
   const membershipRepository = createMembershipRepository(database);
   await membershipRepository.bootstrap(authConfig.memberships ?? []);
   const portalRepository = createPortalRepository(database, {

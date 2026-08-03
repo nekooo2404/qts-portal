@@ -5,8 +5,6 @@ import {
   LoaderCircle,
   LockKeyhole,
   LogIn,
-  LogOut,
-  ShieldCheck,
   ShieldX,
 } from 'lucide-react';
 import { type ReactNode, useEffect } from 'react';
@@ -18,6 +16,7 @@ import AuthGateway from './components/portal/AuthGateway';
 import { PortalLink } from './components/portal/PortalLink';
 import { useCurrentPath } from './lib/navigation';
 import MarketingPortal from './pages/MarketingPortal';
+import PortalWorkspace from './pages/portal/PortalWorkspace';
 
 function WorkspaceUnavailable({ workspace }: { workspace: Workspace }) {
   const isClient = workspace === 'client';
@@ -151,24 +150,7 @@ function WorkspaceGate({ path, workspace }: { path: string; workspace: Workspace
     );
   }
 
-  const isClient = workspace === 'client';
-  return (
-    <PortalAccessState
-      description={`${state.session.user.displayName} đã đăng nhập qua Google và được backend cấp quyền.`}
-      eyebrow={`${isClient ? 'Client' : 'Internal'} · Session hợp lệ`}
-      icon={<ShieldCheck aria-hidden="true" />}
-      note="API nghiệp vụ chưa được tích hợp nên hệ thống không tạo hoặc hiển thị dữ liệu vận hành giả."
-      title={`${isClient ? 'Client' : 'Internal'} Portal đã xác thực`}
-    >
-      <dl className="portal-session-details" aria-label="Quyền truy cập hiện tại">
-        <div><dt>Tenant</dt><dd>{state.session.authorization.tenantId}</dd></div>
-        <div><dt>Role</dt><dd>{state.session.authorization.role}</dd></div>
-      </dl>
-      <button className="portal-button portal-button--primary" onClick={() => void logout()} type="button">
-        <LogOut aria-hidden="true" /> Đăng xuất
-      </button>
-    </PortalAccessState>
-  );
+  return <PortalWorkspace logout={logout} path={path} session={state.session} />;
 }
 
 function AuthenticatedRoutes({ path }: { path: string }) {

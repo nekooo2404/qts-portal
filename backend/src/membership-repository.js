@@ -161,7 +161,14 @@ export function createMembershipRepository(database) {
              id, tenant_id, email, role, workspace, expires_at,
              created_by_issuer, created_by_subject
            ) VALUES ($1, $2, lower($3), $4, $5, $6, $7, $8)
-           RETURNING id, tenant_id, email, role, workspace, status, expires_at, created_at`,
+           RETURNING id,
+                     tenant_id AS "tenantId",
+                     email,
+                     role,
+                     workspace,
+                     status,
+                     expires_at AS "expiresAt",
+                     created_at AS "createdAt"`,
           [
             id,
             tenantId,
