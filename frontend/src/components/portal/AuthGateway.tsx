@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../../auth/auth-context';
+import { SITE_NAME } from '../../portal/brand';
 import { PortalLink } from './PortalLink';
 
 export default function AuthGateway() {
@@ -18,12 +19,12 @@ export default function AuthGateway() {
   const isConfigured = state.status !== 'unconfigured';
   return (
     <main className="auth-gateway" data-portal="true">
-      <section className="auth-identity" aria-label="QTS Operations Portal">
-        <PortalLink className="auth-brand" to="/company" aria-label="QTS - Trang công ty">
+      <section className="auth-identity" aria-label={`${SITE_NAME} Operations Portal`}>
+        <PortalLink className="auth-brand" to="/" aria-label={`${SITE_NAME} - Trang chủ`}>
           <img alt="Logo khiên QTS" height="72" src="/qts-logo-160.webp" width="72" />
           <span>
-            <strong>QTS</strong>
-            <small>Operations Portal</small>
+            <strong>{SITE_NAME}</strong>
+            <small>Cổng vận hành</small>
           </span>
         </PortalLink>
 
@@ -57,7 +58,7 @@ export default function AuthGateway() {
                 : state.status === 'unconfigured'
                   ? 'Đăng nhập chưa khả dụng'
                   : state.status === 'anonymous'
-                    ? 'Đăng nhập vào QTS Portal'
+                    ? `Đăng nhập vào ${SITE_NAME}`
                     : state.status === 'authenticated'
                       ? 'Danh tính đã được xác thực'
                       : 'Không thể xác minh phiên'}
@@ -85,8 +86,8 @@ export default function AuthGateway() {
           <div className="auth-requirements" aria-labelledby="auth-requirements-title">
             <h2 id="auth-requirements-title">Điều kiện để mở truy cập</h2>
             <ul>
-              <li><Building2 aria-hidden="true" /><span>Client Portal cần tenant và quyền được xác nhận từ backend.</span></li>
-              <li><UsersRound aria-hidden="true" /><span>Internal Portal cần danh tính nhân viên và chính sách đặc quyền.</span></li>
+              <li><Building2 aria-hidden="true" /><span>Cổng khách hàng cần tenant và quyền được xác nhận từ backend.</span></li>
+              <li><UsersRound aria-hidden="true" /><span>Trung tâm vận hành cần danh tính nhân viên và chính sách đặc quyền.</span></li>
               <li><DatabaseZap aria-hidden="true" /><span>Dữ liệu chỉ được tải từ nguồn đã xác thực và phân tách tenant.</span></li>
             </ul>
           </div>
@@ -102,7 +103,7 @@ export default function AuthGateway() {
             </button>
           )}
           {state.status === 'anonymous' && (
-            <a className="portal-button portal-button--primary" href={loginHref('/')}>
+            <a className="portal-button portal-button--primary" href={loginHref('/login')}>
               <LogIn aria-hidden="true" /> Đăng nhập với Google
             </a>
           )}
@@ -110,7 +111,7 @@ export default function AuthGateway() {
             <>
               <PortalLink
                 className="portal-button portal-button--primary"
-                to={state.session.authorization.workspace === 'client' ? '/client/overview' : '/admin/soc'}
+                to={state.session.authorization.workspace === 'client' ? '/portal/overview' : '/admin/soc'}
               >
                 Mở workspace <ShieldCheck aria-hidden="true" />
               </PortalLink>
@@ -119,13 +120,13 @@ export default function AuthGateway() {
               </button>
             </>
           )}
-          <PortalLink className="portal-button portal-button--secondary" to="/company">
-            Xem trang công ty QTS
+          <PortalLink className="portal-button portal-button--secondary" to="/">
+            Xem trang chủ {SITE_NAME}
           </PortalLink>
 
           <footer className="auth-footer">
             <span>Không lưu dữ liệu vận hành trong frontend</span>
-            <PortalLink to="/company">Công nghệ &amp; An ninh</PortalLink>
+            <PortalLink to="/">QTS Việt Nam</PortalLink>
           </footer>
         </div>
       </section>
