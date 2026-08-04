@@ -1,1 +1,7 @@
-/* /index.html 200
+/ve-qts    /gioi-thieu/   301
+/tai-nguyen    /tin-tuc/   301
+/bang-gia    /lien-he/   301
+/ho-tro    /lien-he/   301
+/company    /gioi-thieu/   301
+/khach-hang    /du-an/   301
+/khach-hang/*    /du-an/:splat   301

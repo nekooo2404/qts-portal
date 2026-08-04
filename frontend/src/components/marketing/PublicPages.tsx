@@ -154,6 +154,10 @@ export function NewsPage() {
   return <OverviewPage eyebrow="Tin tức" title="Nội dung biên tập đang chờ lịch xuất bản chính thức" intro="Các khối dưới đây là bố cục placeholder để hoàn thiện trải nghiệm đọc trước khi có nội dung đã xác minh." items={articles} finalCtaLabel="Trao đổi với QTS Việt Nam" finalCtaHref="/lien-he" renderItem={(item, index) => <article key={item.slug}><span>0{index + 1}</span><small>{item.category} · {item.publishedLabel}</small><h2>{item.title}</h2><p>{item.excerpt}</p><Link className="qts-text-link" href={`/tin-tuc/${item.slug}`}>Đọc bài viết <ArrowRight aria-hidden="true" /></Link></article>} />;
 }
 
+export function NewsArticlePage({ article }: { article: PlaceholderArticle }) {
+  return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow={`Tin tức · ${article.category}`} title={article.title} description={article.excerpt}><Link className="qts-button qts-button--primary" href="/lien-he">Trao đổi với QTS Việt Nam <ArrowRight aria-hidden="true" /></Link></PublicHero><section className="qts-section qts-case-detail"><div className="qts-shell"><PlaceholderNote /><article><p>{article.summary}</p><p>{article.publishedLabel} · {article.readTime}</p></article></div></section><PublicCta /></main></MarketingShell>;
+}
+
 export function CaseStudiesPage() { return <ProjectsPage />; }
 
 export function CaseStudyPage({ item }: { item: PlaceholderProject }) {
