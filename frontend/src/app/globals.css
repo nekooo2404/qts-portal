@@ -1,0 +1,13 @@
+@import '../../tokens.css';
+@import 'tailwindcss';
+@import '../styles.css';
+@import '../portal.css';
+
+@theme inline {
+  --font-sans: var(--font-be-vietnam-pro);
+  --font-mono: var(--font-ibm-plex-mono);
+  --color-qts-navy: var(--primitive-night-950);
+  --color-qts-blue: var(--color-accent);
+  --color-qts-surface: var(--color-paper);
+  --color-qts-border: var(--color-rule);
+}

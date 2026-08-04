@@ -1,12 +1,14 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Map / Diagram · theme: Cobalt
- * enrichment: E5 Custom Illustration · craft: tier-B security topology · nav: N11 Mega-menu · footer: Ft5 Statement
- * audience: doanh nghiệp và đội IT tại Việt Nam · use: đặt lịch đánh giá an ninh · tone: technical, tin cậy, tiết chế
- * H9 knobs: method=tier-B, animation=one-shot, scale=dominant · N11 knobs: columns=3, feature=none, scrim=dim-only
+/* Hallmark | macrostructure: Workbench | genre: modern-minimal | nav: N1b | footer: Ft1
+ * theme: custom | vibe: "enterprise clarity, cool, technical" | paper: oklch(98% 0.008 245) | accent: oklch(52% 0.16 242)
+ * display: Be Vietnam Pro | body: Be Vietnam Pro | data: IBM Plex Mono | outlier: none | axes: light / geometric-sans / cool
+ * enrichment: E4 floating no-frame product UI | craft: tier-A DOM/CSS | studied: no | context: inferred
+ * pre-emit critique: P5 H5 E5 S5 R5 V4
+ * final audit: contrast pass (40-41) | mobile pass (34, 49-57) | slop 58/58 | icons pass (30)
  */
 
 /* Primitive tokens */
 :root {
-  --primitive-paper-0: oklch(100% 0 0);
+  --primitive-paper-0: oklch(99.5% 0.005 245);
   --primitive-paper-1: oklch(96.5% 0.008 250);
   --primitive-paper-2: oklch(92% 0.012 250);
   --primitive-paper-3: oklch(86% 0.014 250);
@@ -110,9 +112,10 @@
   --portal-scrim: var(--primitive-night-scrim);
   --portal-shadow: var(--primitive-night-shadow);
   --portal-chart-grid: var(--primitive-night-700);
-  --portal-font-display: "Space Grotesk", "Trebuchet MS", sans-serif;
-  --portal-font-body: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --portal-font-display: var(--font-be-vietnam-pro);
+  --portal-font-body: var(--font-be-vietnam-pro);
   --portal-rail-width: 17rem;
+  --portal-rail-compact-width: 5.5rem;
   --portal-topbar-height: 4rem;
   --portal-content-max: 100rem;
 
@@ -157,10 +160,10 @@
   --color-shadow: var(--primitive-shadow);
   --color-transparent: var(--primitive-transparent);
 
-  --font-display: "Space Grotesk", "Trebuchet MS", sans-serif;
-  --font-body: "Segoe UI", "Noto Sans", Arial, sans-serif;
-  --font-mono: var(--font-display);
-  --font-wordmark: var(--font-display);
+  --font-display: var(--font-be-vietnam-pro);
+  --font-body: var(--font-be-vietnam-pro);
+  --font-mono: var(--font-ibm-plex-mono);
+  --font-wordmark: var(--font-be-vietnam-pro);
 
   --space-3xs: var(--primitive-space-1);
   --space-2xs: var(--primitive-space-2);
@@ -244,4 +247,109 @@
   --map-line: var(--color-rule);
   --map-node-bg: var(--color-paper);
   --map-node-active: var(--color-accent-soft);
+}
+
+/* QTS Việt Nam marketing system. Kept as a final override so legacy portal aliases stay intact. */
+:root {
+  --color-paper: oklch(98% 0.008 245);
+  --color-paper-2: oklch(95.5% 0.013 245);
+  --color-paper-3: oklch(91.5% 0.018 245);
+  --color-paper-strong: oklch(86% 0.024 245);
+  --color-ink: oklch(18% 0.025 250);
+  --color-ink-2: oklch(29% 0.03 250);
+  --color-body: oklch(35% 0.025 250);
+  --color-muted: oklch(45% 0.022 250);
+  --color-rule: oklch(82% 0.018 245);
+  --color-rule-strong: oklch(69% 0.026 245);
+  --color-navy: oklch(22% 0.055 248);
+  --color-navy-raised: oklch(27% 0.06 248);
+  --color-navy-soft: oklch(34% 0.055 248);
+  --color-accent: oklch(52% 0.16 242);
+  --color-accent-hover: oklch(45% 0.15 242);
+  --color-accent-soft: oklch(92% 0.035 235);
+  --color-accent-ink: oklch(98% 0.008 245);
+  --color-signal: oklch(72% 0.12 210);
+  --color-signal-soft: oklch(94% 0.026 210);
+  --color-focus: oklch(61% 0.18 238);
+  --color-success: oklch(48% 0.12 155);
+  --color-success-soft: oklch(94% 0.026 155);
+  --color-warning: oklch(51% 0.13 75);
+  --color-warning-soft: oklch(95% 0.035 85);
+  --color-error: oklch(50% 0.17 25);
+  --color-error-soft: oklch(95% 0.025 25);
+  --color-info: oklch(48% 0.12 285);
+  --color-info-soft: oklch(95% 0.02 285);
+  --color-on-dark: oklch(97% 0.009 235);
+  --color-on-dark-muted: oklch(79% 0.018 235);
+  --color-scrim: oklch(14% 0.025 250 / 0.58);
+  --color-shadow: oklch(20% 0.04 245 / 0.12);
+
+  --font-display: var(--font-be-vietnam-pro), sans-serif;
+  --font-body: var(--font-be-vietnam-pro), sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), monospace;
+  --font-wordmark: var(--font-ibm-plex-mono), monospace;
+
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.25rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+  --space-4xl: 6rem;
+  --space-5xl: 7.5rem;
+  --space-section: var(--space-4xl);
+  --page-gutter: 1rem;
+  --page-max: 80rem;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.25rem;
+  --text-3xl: 3rem;
+  --text-4xl: 3.5rem;
+  --text-display: 3.5rem;
+
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-round: 50%;
+  --rule-thin: 1px;
+  --rule-focus: 2px;
+  --control-height: 2.75rem;
+  --shadow-whisper: 0 1px 2px var(--color-shadow);
+  --shadow-product: 0 1.5rem 4rem var(--color-shadow);
+
+  --motion-fast: 160ms;
+  --motion-base: 240ms;
+  --motion-slow: 360ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --button-height: var(--control-height);
+  --button-radius: var(--radius-md);
+  --button-bg: var(--color-navy);
+  --button-bg-hover: var(--color-navy-raised);
+  --button-fg: var(--color-on-dark);
+  --button-border: var(--color-navy);
+  --button-disabled-bg: var(--color-paper-3);
+  --button-disabled-fg: var(--color-muted);
+  --input-height: var(--control-height);
+  --input-bg: var(--color-paper);
+  --input-bg-hover: var(--color-paper-2);
+  --input-border: var(--color-rule-strong);
+  --input-border-active: var(--color-accent);
+  --input-radius: var(--radius-md);
+  --panel-bg: var(--color-paper);
+  --panel-border: var(--color-rule);
+  --panel-radius: var(--radius-lg);
+  --nav-height: 4.5rem;
+  --nav-bg: var(--color-paper);
+  --nav-border: var(--color-rule);
+  --banner-height: 4.5rem;
 }

@@ -1,103 +1,163 @@
-import { ChevronDown, Menu, Search, X } from 'lucide-react';
-import { Fragment, useEffect, useState } from 'react';
+'use client';
 
-import { serviceMenuGroups, services } from '../content';
+import { ChevronDown, Menu, Search, X } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+
+import {
+  primaryNavigation,
+  serviceMenu,
+  solutionMenu,
+  type MarketingLink,
+} from '../marketing/content';
 import { SearchDialog } from './SearchDialog';
 
+type OpenMenu = 'services' | 'solutions' | null;
+
+const pathMatches = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
 export function SiteHeader() {
-  const [megaOpen, setMegaOpen] = useState(false);
+  const pathname = usePathname() ?? '/';
+  const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+  const serviceActive = pathMatches(pathname, '/dich-vu');
+  const solutionActive = pathMatches(pathname, '/giai-phap');
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        setMegaOpen(false);
+        setOpenMenu(null);
         setMobileOpen(false);
         setSearchOpen(true);
       }
 
       if (event.key === 'Escape') {
-        setMegaOpen(false);
+        setOpenMenu(null);
         setMobileOpen(false);
         setSearchOpen(false);
       }
     };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!headerRef.current?.contains(event.target as Node)) setOpenMenu(null);
+    };
 
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
   }, []);
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
+    };
+  }, [mobileOpen]);
+
+  const toggleMenu = (menu: Exclude<OpenMenu, null>) => {
+    setOpenMenu((current) => current === menu ? null : menu);
+  };
+
   const closeNavigation = () => {
-    setMegaOpen(false);
+    setOpenMenu(null);
     setMobileOpen(false);
   };
 
   return (
-    <Fragment>
-      <header className="site-header">
-        <div className="site-header__inner">
-          <a className="brand" href="#top" aria-label="QTS - Trang đầu">
-            <img
-              src="/qts-logo-160.webp"
-              width="48"
-              height="48"
-              alt="Logo khiên QTS"
-            />
+    <>
+      <header className="qts-header" ref={headerRef}>
+        <div className="qts-header__inner">
+          <Link className="qts-brand" href="/">
+            <img src="/qts-logo-160.webp" width="40" height="40" alt="" />
             <span>
-              <strong>QTS</strong>
-              <small>Công nghệ &amp; An ninh</small>
+              <strong>QTS Việt Nam</strong>
+              <small>Thiết kế website · Phần mềm · Giải pháp công nghệ</small>
             </span>
-          </a>
+          </Link>
 
-          <nav className="desktop-nav" aria-label="Điều hướng chính">
-            <button
-              type="button"
-              className="nav-link nav-link--trigger"
-              aria-label="Mở danh mục dịch vụ"
-              aria-expanded={megaOpen}
-              aria-controls="services-mega"
-              onClick={() => setMegaOpen((current) => !current)}
-            >
-              Dịch vụ
-              <ChevronDown aria-hidden="true" />
-            </button>
-            <a className="nav-link" href="#operations">
-              Cách làm
-            </a>
-            <a className="nav-link" href="#resources">
-              Tài nguyên
-            </a>
-            <a className="nav-link" href="#about">
-              Về QTS
-            </a>
+          <nav className="qts-nav" aria-label="Điều hướng chính">
+            <div className="qts-nav__menu">
+              <button
+                type="button"
+                className="qts-nav__link"
+                data-active={serviceActive}
+                aria-expanded={openMenu === 'services'}
+                aria-controls="service-navigation"
+                onClick={() => toggleMenu('services')}
+              >
+                Dịch vụ <ChevronDown aria-hidden="true" />
+              </button>
+              {openMenu === 'services' && (
+                <NavDropdown id="service-navigation" title="Dịch vụ QTS" links={serviceMenu} currentPath={pathname} onNavigate={closeNavigation} />
+              )}
+            </div>
+
+            <div className="qts-nav__menu">
+              <button
+                type="button"
+                className="qts-nav__link"
+                data-active={solutionActive}
+                aria-expanded={openMenu === 'solutions'}
+                aria-controls="solution-navigation"
+                onClick={() => toggleMenu('solutions')}
+              >
+                Giải pháp <ChevronDown aria-hidden="true" />
+              </button>
+              {openMenu === 'solutions' && (
+                <NavDropdown id="solution-navigation" title="Giải pháp theo ngành" links={solutionMenu} currentPath={pathname} onNavigate={closeNavigation} />
+              )}
+            </div>
+
+            {primaryNavigation.slice(2).map((item) => (
+              <Link
+                className="qts-nav__link"
+                data-active={pathMatches(pathname, item.href)}
+                aria-current={pathMatches(pathname, item.href) ? 'page' : undefined}
+                href={item.href}
+                key={item.href}
+                onClick={closeNavigation}
+              >
+                {item.label}
+              </Link>
+            ))}
           </nav>
 
-          <div className="site-header__actions">
+          <div className="qts-header__actions">
             <button
-              className="icon-button"
+              className="qts-icon-button qts-search-trigger"
               type="button"
               aria-label="Mở tìm kiếm"
-              title="Tìm nhanh"
+              title="Tìm kiếm"
               onClick={() => {
-                closeNavigation();
+                setOpenMenu(null);
                 setSearchOpen(true);
               }}
             >
               <Search aria-hidden="true" />
             </button>
-            <a className="button button--primary header-cta" href="#contact">
-              Trao đổi với QTS
-            </a>
+            <Link className="qts-login-link" href="/login">Đăng nhập</Link>
+            <Link className="qts-button qts-button--primary qts-header__cta" href="/lien-he">
+              Nhận tư vấn
+            </Link>
             <button
-              className="icon-button mobile-toggle"
+              className="qts-icon-button qts-mobile-toggle"
               type="button"
               aria-label={mobileOpen ? 'Đóng điều hướng' : 'Mở điều hướng'}
               aria-expanded={mobileOpen}
               aria-controls="mobile-navigation"
               onClick={() => {
-                setMegaOpen(false);
+                setOpenMenu(null);
                 setMobileOpen((current) => !current);
               }}
             >
@@ -106,70 +166,47 @@ export function SiteHeader() {
           </div>
         </div>
 
-        {megaOpen && (
-          <div id="services-mega" className="mega-panel">
-            <div className="mega-panel__inner">
-              {serviceMenuGroups.map((group) => (
-                <section className="mega-group" key={group.title}>
-                  <h2>{group.title}</h2>
-                  {group.serviceIds.map((serviceId) => {
-                    const service = services.find((item) => item.id === serviceId);
-                    if (!service) return null;
-
-                    return (
-                      <a
-                        href={`#service-${service.id}`}
-                        key={service.id}
-                        onClick={closeNavigation}
-                      >
-                        <strong>{service.title}</strong>
-                        <span>{service.description}</span>
-                      </a>
-                    );
-                  })}
-                </section>
-              ))}
-            </div>
-          </div>
-        )}
-
         {mobileOpen && (
-          <nav
-            id="mobile-navigation"
-            className="mobile-navigation"
-            aria-label="Điều hướng di động"
-          >
-            <a href="#services" onClick={closeNavigation}>
-              Dịch vụ
-            </a>
-            <a href="#operations" onClick={closeNavigation}>
-              Cách làm
-            </a>
-            <a href="#resources" onClick={closeNavigation}>
-              Tài nguyên
-            </a>
-            <a href="#about" onClick={closeNavigation}>
-              Về QTS
-            </a>
-            <a className="button button--primary" href="#contact" onClick={closeNavigation}>
-              Trao đổi với QTS
-            </a>
+          <nav className="qts-mobile-nav" id="mobile-navigation" aria-label="Điều hướng di động">
+            <details>
+              <summary data-active={serviceActive}>Dịch vụ</summary>
+              <div>{serviceMenu.map((item) => <Link href={item.href} key={item.href} aria-current={pathMatches(pathname, item.href) ? 'page' : undefined} onClick={closeNavigation}>{item.label}</Link>)}</div>
+            </details>
+            <details>
+              <summary data-active={solutionActive}>Giải pháp</summary>
+              <div>{solutionMenu.map((item) => <Link href={item.href} key={item.href} aria-current={pathMatches(pathname, item.href) ? 'page' : undefined} onClick={closeNavigation}>{item.label}</Link>)}</div>
+            </details>
+            {primaryNavigation.slice(2).map((item) => <Link href={item.href} key={item.href} aria-current={pathMatches(pathname, item.href) ? 'page' : undefined} onClick={closeNavigation}>{item.label}</Link>)}
+            <Link href="/ve-qts" onClick={closeNavigation}>Về QTS</Link>
+            <Link href="/ho-tro" onClick={closeNavigation}>Hỗ trợ</Link>
+            <div className="qts-mobile-nav__actions">
+              <Link className="qts-button qts-button--secondary" href="/login">Đăng nhập</Link>
+              <Link className="qts-button qts-button--primary" href="/lien-he">Nhận tư vấn</Link>
+            </div>
           </nav>
         )}
       </header>
 
-      {megaOpen && (
-        <button
-          className="nav-scrim"
-          type="button"
-          aria-label="Đóng danh mục dịch vụ"
-          onClick={() => setMegaOpen(false)}
-        />
-      )}
+      {searchOpen && <SearchDialog isOpen onClose={() => setSearchOpen(false)} />}
+    </>
+  );
+}
 
-      {searchOpen && (
-        <SearchDialog isOpen onClose={() => setSearchOpen(false)} />
-      )}
-    </Fragment>
+function NavDropdown({ id, title, links, currentPath, onNavigate }: { id: string; title: string; links: readonly MarketingLink[]; currentPath: string; onNavigate: () => void }) {
+  return (
+    <section className="qts-nav-dropdown" id={id} aria-label={title}>
+      <div className="qts-nav-dropdown__intro">
+        <strong>{title}</strong>
+        <p>Chọn đúng phạm vi để xem đầu ra, quy trình và cách QTS triển khai.</p>
+      </div>
+      <div className="qts-nav-dropdown__links">
+        {links.map((item) => (
+          <Link href={item.href} key={item.href} aria-current={pathMatches(currentPath, item.href) ? 'page' : undefined} onClick={onNavigate}>
+            <strong>{item.label}</strong>
+            <span>{item.description}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }
