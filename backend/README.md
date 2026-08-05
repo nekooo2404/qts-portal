@@ -1,4 +1,4 @@
-# QTS Portal Backend
+# QTS One Backend
 
 Backend Node.js là ranh giới bảo mật và nguồn quyết định quyền của QTS Portal. Service xử lý Google OIDC, session/CSRF, tenant RBAC, validation, persistence PostgreSQL và audit cho cả Client Portal lẫn Internal Portal.
 
@@ -79,6 +79,9 @@ Migration hiện có:
 | `003_membership_management` | UUID/version phục vụ cập nhật thành viên |
 | `004_internal_invitations` | Lời mời role client/internal với constraint role-workspace |
 | `005_runtime_database_role` | Role runtime `qts_app` không đặc quyền và quyền DML tối thiểu cho RLS |
+| `006_contact_requests` | Yêu cầu tư vấn công khai, audit và RLS chỉ cho internal |
+| `007_invitation_lifecycle` | Version, thời điểm cập nhật/thu hồi và index hết hạn lời mời |
+| `008_contact_requests_corporate_intake` | Mở rộng lead doanh nghiệp với họ tên, điện thoại, công ty và sáu nhóm dịch vụ |
 
 Mọi repository operation chạy trong transaction, hạ quyền bằng `SET LOCAL ROLE qts_app`, rồi đặt `qts.tenant_id` và `qts.internal_access`. Client scope không thể yêu cầu tenant khác; internal scope chỉ cross-tenant sau khi backend permission cho phép. Integration test còn truy cập các UUID đã biết của tenant khác để xác minh API vẫn trả `404` thay vì dựa vào việc ID khó đoán.
 
@@ -99,7 +102,7 @@ Chỉ rollback sau khi backup và đọc file `.down.sql`; một số migration 
 
 ## Endpoint
 
-### Infrastructure và auth
+### Infrastructure, public và auth
 
 | Method | Path |
 | --- | --- |
@@ -110,6 +113,7 @@ Chỉ rollback sau khi backup và đọc file `.down.sql`; một số migration 
 | `GET` | `/api/v1/auth/callback/google` |
 | `GET` | `/api/v1/auth/session` |
 | `POST` | `/api/v1/auth/logout` |
+| `POST` | `/api/v1/contact-requests` |
 
 ### Portal
 
@@ -121,13 +125,15 @@ Chỉ rollback sau khi backup và đọc file `.down.sql`; một số migration 
 | `GET,POST /api/v1/portal/tickets/{id}/comments` | Ticket conversation |
 | `GET /api/v1/portal/documents/{id}/download` | Authorized download |
 | `GET,PATCH /api/v1/portal/members[/{id}]` | Membership management |
-| `GET,POST /api/v1/portal/invitations` | Invitation provisioning |
+| `GET,POST /api/v1/portal/invitations` | Liệt kê và tạo invitation provisioning |
+| `PATCH /api/v1/portal/invitations/{id}` | Thu hồi invitation đang chờ bằng optimistic version |
 | `GET /api/v1/portal/audit` | Audit search |
 
 Contract đầy đủ: [OpenAPI](../docs/api/openapi.yaml).
 
 ## Quy ước request
 
+- Contact request không yêu cầu session, được rate-limit 5 lần/10 phút theo địa chỉ nguồn và chỉ được đọc bởi `account_manager`/`qts_admin` qua dashboard internal.
 - Portal endpoint cần session cookie cùng origin.
 - `POST`/`PATCH` cần `X-CSRF-Token` khớp session.
 - Tạo ticket cần `Idempotency-Key` dài 8–128 ký tự thuộc `[A-Za-z0-9._:-]`.
@@ -135,6 +141,22 @@ Contract đầy đủ: [OpenAPI](../docs/api/openapi.yaml).
 - Mutation update cần `expectedVersion`; version cũ trả `409`.
 - JSON thường tối đa 1 MiB; document JSON tối đa 14 MiB để mang file Base64 tối đa 10 MiB.
 - Response có `X-Request-Id`; auth/portal response nhạy cảm dùng `Cache-Control: no-store`.
+
+Payload contact intake công khai:
+
+```json
+{
+  "name": "Nguyễn Minh An",
+  "phone": "0901234567",
+  "email": "minhan@example.vn",
+  "company": "Công ty Minh An",
+  "service": "it-solutions",
+  "message": "Cần đánh giá hạ tầng trước đợt phát hành mới.",
+  "consent": true
+}
+```
+
+`service` nhận một trong: `website-design`, `software-development`, `digital-transformation`, `online-advertising`, `digital-marketing`, `it-solutions`.
 
 Error envelope:
 

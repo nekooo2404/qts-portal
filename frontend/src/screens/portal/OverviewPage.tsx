@@ -20,17 +20,20 @@ import { getOverview } from '../../portal/api';
 import type { ServiceInterest } from '../../marketing/content';
 import type { ContactRequestRecord, LoadState, PortalOverview, PortalRecord, ThreatPoint } from '../../portal/types';
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('vi-VN', {
+  dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
+});
+const CHART_DAY_FORMATTER = new Intl.DateTimeFormat('vi-VN', {
+  day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh',
+});
+
 function formatTime(value: unknown): string {
   if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) return 'Chưa có thời gian';
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(new Date(value));
+  return DATE_TIME_FORMATTER.format(new Date(value));
 }
 
 function formatChartDay(value: string): string {
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(new Date(value));
+  return CHART_DAY_FORMATTER.format(new Date(value));
 }
 
 function linePoints(series: ThreatPoint[], key: keyof Pick<ThreatPoint, 'critical' | 'high' | 'medium' | 'low'>, max: number) {

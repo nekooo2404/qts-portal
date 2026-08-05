@@ -20,9 +20,16 @@ const dataFont = IBM_Plex_Mono({
 });
 
 const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? DEFAULT_SITE_ORIGIN;
+let metadataBase: URL;
+
+try {
+  metadataBase = new URL(siteOrigin);
+} catch {
+  metadataBase = new URL(DEFAULT_SITE_ORIGIN);
+}
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteOrigin),
+  metadataBase,
   title: {
     default: 'QTS Việt Nam – Thiết kế Website, Phần mềm và Giải pháp Công nghệ',
     template: `%s | ${SITE_NAME}`,

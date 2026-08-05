@@ -4,6 +4,13 @@ import { ArrowUp } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 
+function returnToTop() {
+  const reducedMotion = typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelector<HTMLAnchorElement>('.qts-header .qts-brand')?.focus({ preventScroll: true });
+  window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+}
+
 export function MarketingEnhancements() {
   const pathname = usePathname();
   const frameRef = useRef<number | null>(null);
@@ -48,13 +55,6 @@ export function MarketingEnhancements() {
       delete root.dataset.showBackToTop;
     };
   }, [pathname]);
-
-  const returnToTop = () => {
-    const reducedMotion = typeof window.matchMedia === 'function'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    document.querySelector<HTMLAnchorElement>('.qts-header .qts-brand')?.focus({ preventScroll: true });
-    window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
-  };
 
   return (
     <>

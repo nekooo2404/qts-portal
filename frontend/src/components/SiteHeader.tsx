@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronDown, Menu, Search, X } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -16,6 +17,7 @@ import { SearchDialog } from './SearchDialog';
 type OpenMenu = 'services' | 'solutions' | null;
 
 const pathMatches = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
+const restoreFocus = (target: HTMLElement | null) => requestAnimationFrame(() => target?.focus());
 
 export function SiteHeader() {
   const pathname = usePathname() ?? '/';
@@ -23,6 +25,8 @@ export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
+  const searchTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileTriggerRef = useRef<HTMLButtonElement>(null);
   const serviceActive = pathMatches(pathname, '/dich-vu');
   const solutionActive = pathMatches(pathname, '/giai-phap');
 
@@ -38,7 +42,7 @@ export function SiteHeader() {
       if (event.key === 'Escape') {
         setOpenMenu(null);
         setMobileOpen(false);
-        setSearchOpen(false);
+        if (mobileOpen) restoreFocus(mobileTriggerRef.current);
       }
     };
     const handlePointerDown = (event: PointerEvent) => {
@@ -51,7 +55,7 @@ export function SiteHeader() {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('pointerdown', handlePointerDown);
     };
-  }, []);
+  }, [mobileOpen]);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -79,7 +83,7 @@ export function SiteHeader() {
       <header className="qts-header" ref={headerRef}>
         <div className="qts-header__inner">
           <Link className="qts-brand" href="/">
-            <img src="/qts-logo-160.webp" width="40" height="40" alt="" />
+            <Image src="/qts-logo-160.webp" width={40} height={40} alt="" />
             <span>
               <strong>QTS Việt Nam</strong>
               <small>Thiết kế website · Phần mềm · Giải pháp công nghệ</small>
@@ -135,6 +139,7 @@ export function SiteHeader() {
 
           <div className="qts-header__actions">
             <button
+              ref={searchTriggerRef}
               className="qts-icon-button qts-search-trigger"
               type="button"
               aria-label="Mở tìm kiếm"
@@ -151,6 +156,7 @@ export function SiteHeader() {
               Nhận tư vấn
             </Link>
             <button
+              ref={mobileTriggerRef}
               className="qts-icon-button qts-mobile-toggle"
               type="button"
               aria-label={mobileOpen ? 'Đóng điều hướng' : 'Mở điều hướng'}
@@ -187,7 +193,15 @@ export function SiteHeader() {
         )}
       </header>
 
-      {searchOpen && <SearchDialog isOpen onClose={() => setSearchOpen(false)} />}
+      {searchOpen && (
+        <SearchDialog
+          isOpen
+          onClose={() => {
+            setSearchOpen(false);
+            searchTriggerRef.current?.focus();
+          }}
+        />
+      )}
     </>
   );
 }

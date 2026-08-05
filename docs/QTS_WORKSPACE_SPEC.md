@@ -44,7 +44,7 @@ Chưa thuộc phạm vi hiện tại:
 ## 4. Kiến trúc và ranh giới
 
 ```text
-React/Vite UI
+Next.js App Router UI
   -> same-origin Node.js API
        -> policy + schema + service
             -> PostgreSQL repository
@@ -74,7 +74,8 @@ React/Vite UI
 
 - Session ID ngẫu nhiên/opaque, chỉ bản băm được lưu PostgreSQL.
 - Cookie `HttpOnly`, `SameSite=Lax`, `Secure` và prefix `__Host-` ở production.
-- Session có TTL tối đa theo cấu hình và bị thu hồi khi member đổi role/status.
+- Session có TTL tối đa theo cấu hình và bị thu hồi khi member đổi role/status hoặc tenant không còn `ACTIVE`.
+- Mỗi lần đọc/xác thực session đều đối chiếu lại identity, tenant, role, workspace và trạng thái membership/tenant trong PostgreSQL.
 - CSRF token gắn với session và được so sánh constant-time.
 - OIDC transaction là one-time record có TTL trong PostgreSQL.
 
@@ -84,6 +85,9 @@ React/Vite UI
 - Tài khoản tiếp theo được pre-provision bằng invitation theo verified email.
 - Lần login đầu tiên nhận invitation và bind sang `iss + sub`.
 - Invitation quá hạn hoặc member disabled không tạo session.
+- Invitation có version; chỉ trạng thái `PENDING` còn hạn mới được chấp nhận hoặc thu hồi.
+- Đọc danh sách và tạo lời mời mới sẽ đóng các bản ghi `PENDING` đã quá hạn thành `EXPIRED`.
+- Client admin chỉ nhìn thấy và quản lý lời mời client trong tenant của mình; lời mời nội bộ thuộc QTS admin.
 
 ## 6. Role và permission
 
@@ -167,6 +171,8 @@ Permission được chia theo domain: dashboard, tenants, alerts, tickets, asset
 - CRUD/flow chính của từng module lưu và đọc lại từ PostgreSQL.
 - Ticket idempotency, version conflict và comment visibility hoạt động.
 - Member role/status change thu hồi session.
+- Tenant chuyển sang `SUSPENDED` hoặc `ARCHIVED` thu hồi toàn bộ session liên quan và chặn đăng nhập mới.
+- Thu hồi lời mời kiểm tra CSRF, tenant/workspace, optimistic version và ghi audit cùng transaction.
 - Audit ghi đúng actor/action/resource/outcome.
 - Database rỗng cho empty state, không sinh dữ liệu giả.
 - UI không overflow ở mobile và không có console error trong smoke flow.

@@ -15,7 +15,6 @@ import {
 import { FaqList } from './FaqList';
 import { LeadForm } from './LeadForm';
 import { MarketingShell } from './MarketingShell';
-import { PricingPlans } from './PricingPlans';
 import { ProductPreview } from './ProductPreview';
 import { SectionHeading } from './SectionHeading';
 
@@ -158,14 +157,8 @@ export function NewsArticlePage({ article }: { article: PlaceholderArticle }) {
   return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow={`Tin tức · ${article.category}`} title={article.title} description={article.excerpt}><Link className="qts-button qts-button--primary" href="/lien-he">Trao đổi với QTS Việt Nam <ArrowRight aria-hidden="true" /></Link></PublicHero><section className="qts-section qts-case-detail"><div className="qts-shell"><PlaceholderNote /><article><p>{article.summary}</p><p>{article.publishedLabel} · {article.readTime}</p></article></div></section><PublicCta /></main></MarketingShell>;
 }
 
-export function CaseStudiesPage() { return <ProjectsPage />; }
-
 export function CaseStudyPage({ item }: { item: PlaceholderProject }) {
   return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow="Dự án · Placeholder" title={item.title} description={item.challenge}><PlaceholderNote /></PublicHero><section className="qts-section qts-case-detail"><div className="qts-shell qts-case-detail__grid"><article><span>01</span><h2>Khách hàng</h2><p>{item.client}</p></article><article><span>02</span><h2>Cách tiếp cận</h2><p>{item.solution}</p></article><article><span>03</span><h2>Kết quả</h2><p>{item.result}</p></article></div></section><PublicCta /></main></MarketingShell>;
-}
-
-export function PricingPage() {
-  return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow="Phạm vi dịch vụ" title="Báo giá theo phạm vi thật" description="QTS Việt Nam không hiển thị con số chưa được xác nhận. Sau khảo sát, đề xuất sẽ nêu rõ module, chi phí và điều kiện áp dụng."><Link className="qts-button qts-button--primary" href="/lien-he">Nhận báo giá <ArrowRight aria-hidden="true" /></Link></PublicHero><section className="qts-section qts-pricing-section"><div className="qts-shell"><PricingPlans /></div></section><PublicCta /></main></MarketingShell>;
 }
 
 export function AboutPage() {
@@ -176,9 +169,6 @@ export function ContactPage() {
   return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow="Liên hệ" title="Bắt đầu bằng bối cảnh thật của doanh nghiệp" description="Mô tả mục tiêu, hệ thống hiện tại và thời điểm cần triển khai. Yêu cầu hợp lệ được chuyển vào kênh tiếp nhận của QTS Việt Nam." aside={<div className="qts-contact-facts"><div><Mail aria-hidden="true" /><span>Email</span><strong>[EMAIL]</strong></div><div><Phone aria-hidden="true" /><span>Điện thoại</span><strong>[SỐ ĐIỆN THOẠI]</strong></div><div><MapPin aria-hidden="true" /><span>Văn phòng</span><strong>[ĐỊA CHỈ]</strong></div></div>} /><section className="qts-lead qts-lead--page"><div className="qts-shell qts-lead__layout"><header><p className="qts-kicker">Yêu cầu tư vấn</p><h2>Thông tin đủ rõ giúp kết nối đúng chuyên môn.</h2><p>Sau khi gửi thành công, yêu cầu có mã tiếp nhận để đội QTS xử lý.</p><ul><li><Check aria-hidden="true" /> Không tự động đăng ký quảng cáo</li><li><Check aria-hidden="true" /> Có kiểm tra dữ liệu đầu vào</li></ul></header><LeadForm /></div></section></main></MarketingShell>;
 }
 
-export function ResourcesPage() { return <NewsPage />; }
-export function SupportPage() { return <ContactPage />; }
-
 export function LegalPage({ type }: { type: 'privacy' | 'terms' }) {
   const privacy = type === 'privacy';
   const title = privacy ? 'Chính sách bảo mật và dữ liệu' : 'Điều khoản sử dụng';
@@ -186,5 +176,3 @@ export function LegalPage({ type }: { type: 'privacy' | 'terms' }) {
 }
 
 function DetailFacts({ items }: { items: Array<[string, string]> }) { return <dl className="qts-detail-facts">{items.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>; }
-
-export type { PlaceholderArticle };

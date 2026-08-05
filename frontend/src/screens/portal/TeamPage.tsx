@@ -22,12 +22,13 @@ const INTERNAL_ROLES = [
   ['soc_l1', 'SOC L1'], ['soc_l2', 'SOC L2'], ['soc_l3', 'SOC L3'],
   ['account_manager', 'Account manager'], ['qts_admin', 'QTS admin'],
 ] as const;
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('vi-VN', {
+  dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
+});
 
 function formatTime(value: unknown): string {
   if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) return 'Chưa có';
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(new Date(value));
+  return DATE_TIME_FORMATTER.format(new Date(value));
 }
 
 function MemberRow({ canWrite, member, onUpdated, session }: {
@@ -224,14 +225,14 @@ export default function TeamPage(props: TeamPageProps) {
       <p className="portal-action-status" aria-live="polite">{message}</p>
       {loading ? <PortalLoading /> : error ? <PortalErrorState error={error} onRetry={reload} /> : (
         <>
-          <div className="portal-filter-bar" role="search" aria-label="Lọc thành viên và lời mời">
+          <form className="portal-filter-bar" aria-label="Lọc thành viên và lời mời" onSubmit={(event) => event.preventDefault()} role="search">
             <label className="portal-search-field">
               <Search aria-hidden="true" />
               <span className="sr-only">Tìm thành viên hoặc lời mời</span>
-              <input onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên, email, vai trò..." type="search" value={query} />
+              <input onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên, email, vai trò…" type="search" value={query} />
             </label>
             <output>{visibleMembers.length + visibleInvitations.length} kết quả</output>
-          </div>
+          </form>
           <section className="portal-section" aria-labelledby="members-title">
             <header className="portal-section__header"><div><p className="portal-eyebrow">Danh tính đã gắn</p><h2 id="members-title">Thành viên</h2></div><Users aria-hidden="true" /></header>
             {visibleMembers.length === 0 ? <PortalEmptyState title={query ? 'Không tìm thấy thành viên' : 'Chưa có thành viên'} description={query ? 'Thử từ khóa khác hoặc xóa bộ lọc hiện tại.' : 'Chưa có danh tính nào trong phạm vi tổ chức hiện tại.'} /> : (

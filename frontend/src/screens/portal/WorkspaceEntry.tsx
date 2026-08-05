@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowRight, DatabaseZap, LoaderCircle, LockKeyhole, LogIn, ShieldX } from 'lucide-react';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
@@ -21,7 +22,7 @@ function AccessState({ children, description, eyebrow, icon, note, title }: {
 }) {
   return (
     <main className="portal-public-state" data-portal="true" id="main-content">
-      <img alt="Logo khiên QTS" height="72" src="/qts-logo-160.webp" width="72" />
+      <Image alt="Logo khiên QTS" height={72} src="/qts-logo-160.webp" width={72} />
       {icon}
       <p className="portal-eyebrow">{eyebrow}</p>
       <h1>{title}</h1>

@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, LoaderCircle, Send } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 
@@ -111,11 +112,11 @@ export function LeadForm({ compact = false }: { compact?: boolean }) {
       </Field>
 
       <Field label="Email doanh nghiệp" id="lead-email" error={fieldError('email')}>
-        <input id="lead-email" name="email" type="email" autoComplete="email" placeholder="ten@doanhnghiep.vn" value={fields.email} disabled={status === 'loading'} aria-invalid={Boolean(fieldError('email'))} aria-describedby="lead-email-help" onBlur={() => touchField('email')} onChange={(event) => updateField('email', event.target.value)} />
+        <input id="lead-email" name="email" type="email" autoComplete="email" value={fields.email} disabled={status === 'loading'} aria-invalid={Boolean(fieldError('email'))} aria-describedby="lead-email-help" onBlur={() => touchField('email')} onChange={(event) => updateField('email', event.target.value)} />
       </Field>
 
       <Field label="Số điện thoại" id="lead-phone" error={fieldError('phone')}>
-        <input id="lead-phone" name="phone" type="tel" autoComplete="tel" placeholder="090 000 0000" value={fields.phone} disabled={status === 'loading'} aria-invalid={Boolean(fieldError('phone'))} aria-describedby="lead-phone-help" onBlur={() => touchField('phone')} onChange={(event) => updateField('phone', event.target.value)} />
+        <input id="lead-phone" name="phone" type="tel" autoComplete="tel" value={fields.phone} disabled={status === 'loading'} aria-invalid={Boolean(fieldError('phone'))} aria-describedby="lead-phone-help" onBlur={() => touchField('phone')} onChange={(event) => updateField('phone', event.target.value)} />
       </Field>
 
       <Field label="Dịch vụ quan tâm" id="lead-service" error={fieldError('service')}>
@@ -126,13 +127,13 @@ export function LeadForm({ compact = false }: { compact?: boolean }) {
       </Field>
 
       <Field className="qts-field--wide" label="Nội dung trao đổi" id="lead-message" error={fieldError('message')} help={`${fields.message.length}/800 ký tự`}>
-        <textarea id="lead-message" name="message" maxLength={800} value={fields.message} disabled={status === 'loading'} placeholder="Mục tiêu, hệ thống hiện tại và thời điểm cần triển khai" aria-invalid={Boolean(fieldError('message'))} aria-describedby="lead-message-help" onBlur={() => touchField('message')} onChange={(event) => updateField('message', event.target.value)} />
+        <textarea id="lead-message" name="message" maxLength={800} value={fields.message} disabled={status === 'loading'} aria-invalid={Boolean(fieldError('message'))} aria-describedby="lead-message-help" onBlur={() => touchField('message')} onChange={(event) => updateField('message', event.target.value)} />
       </Field>
 
       <div className="qts-lead-form__footer">
         <label className="qts-consent">
           <input type="checkbox" checked={fields.consent} disabled={status === 'loading'} aria-invalid={Boolean(fieldError('consent'))} aria-describedby="lead-consent-help" onBlur={() => touchField('consent')} onChange={(event) => updateField('consent', event.target.checked)} />
-          <span>Tôi đồng ý để QTS liên hệ về yêu cầu này và đã đọc <a href="/phap-ly/bao-mat">chính sách bảo mật</a>.</span>
+          <span>Tôi đồng ý để QTS liên hệ về yêu cầu này và đã đọc <Link href="/phap-ly/bao-mat">chính sách bảo mật</Link>.</span>
         </label>
         <p id="lead-consent-help" className="qts-field__help" data-error={Boolean(fieldError('consent'))}>{fieldError('consent') ?? 'Thông tin chỉ được dùng để xử lý yêu cầu tư vấn.'}</p>
 

@@ -14,6 +14,11 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   const results = useMemo(() => filterSearchEntries(searchItems, query).slice(0, 10), [query]);
 
   const closeDialog = () => {
+    const dialog = dialogRef.current;
+    if (dialog?.open) {
+      if (typeof dialog.close === 'function') dialog.close();
+      else dialog.removeAttribute('open');
+    }
     setQuery('');
     onClose();
   };

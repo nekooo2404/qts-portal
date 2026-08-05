@@ -4055,12 +4055,22 @@ html[data-show-back-to-top='true'] .qts-back-to-top {
   .qts-hero__preview {
     max-height: 4rem;
   }
+
+  .qts-proof {
+    padding-block-start: var(--space-xs);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  [data-section-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
   .qts-back-to-top,
   .qts-header {
-    transition: none;
+    transition: none !important;
   }
 
   .qts-industry-tabs__panel,

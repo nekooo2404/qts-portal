@@ -1,6 +1,6 @@
-# QTS Portal Frontend
+# QTS One Frontend
 
-Frontend React/Vite cung cấp website QTS, cổng Google OIDC và hai workspace Client/Internal. Mọi số liệu nghiệp vụ được tải từ backend thật; frontend không có seed/fallback operational data.
+Frontend Next.js App Router cung cấp website QTS, cổng Google OIDC và hai workspace Client/Internal. Mọi số liệu nghiệp vụ được tải từ backend thật; frontend không có seed/fallback operational data.
 
 Hướng dẫn setup và vận hành đầy đủ nằm tại [README gốc](../README.md).
 
@@ -20,11 +20,11 @@ Frontend guard không phải ranh giới bảo mật. Backend vẫn xác thực 
 
 ```text
 frontend/src/
-|-- auth/                    # AuthContext, hook và contract
+|-- app/                     # Route, metadata, sitemap và static params
 |-- components/portal/       # Shell, navigation link, status, feedback
-|-- pages/portal/            # Dashboard và từng module nghiệp vụ
+|-- components/marketing/    # Shell, form, search và khối marketing dùng chung
 |-- portal/                  # API client, permission, config và hooks
-|-- App.tsx                  # Route/auth gateway
+|-- screens/                 # Website, auth gateway và workspace nghiệp vụ
 |-- portal.css               # Portal workspace responsive styles
 `-- styles.css               # Website/auth global styles
 ```
@@ -33,11 +33,13 @@ frontend/src/
 
 | Nhóm | Route |
 | --- | --- |
-| Public | `/`, `/company` |
-| Client | `/client/overview`, alerts, tickets, assets, licenses, contracts, invoices, documents, knowledge, team, audit |
+| Public | `/`, `/gioi-thieu`, `/dich-vu/*`, `/giai-phap/*`, `/du-an/*`, `/tin-tuc/*`, `/lien-he` |
+| Client | `/portal/overview`, alerts, tickets, assets, licenses, contracts, invoices, documents, knowledge, team, audit |
 | Internal | `/admin/soc`, alerts, tickets, customers, assets, licenses, contracts, invoices, documents, knowledge, integrations, team, shifts, audit |
 
 Route sai workspace hiển thị forbidden. Route không có trong navigation của role hiển thị access denied; API backend vẫn là kiểm soát cuối cùng.
+
+Các route cũ `/ve-qts`, `/khach-hang`, `/tai-nguyen`, `/bang-gia`, `/ho-tro` và `/company` chỉ tồn tại để chuyển hướng tương thích sang cấu trúc public mới.
 
 ## Chạy frontend
 
@@ -46,7 +48,7 @@ npm ci
 npm run dev:frontend
 ```
 
-Mở `http://localhost:5173`. Vite proxy `/api/*` tới `http://127.0.0.1:8080`.
+Mở `http://127.0.0.1:3000`. Next dev server rewrite `/api/*` tới `http://127.0.0.1:8080`.
 
 Đổi backend dev origin nếu cần:
 
@@ -55,10 +57,11 @@ $env:QTS_API_ORIGIN = "http://127.0.0.1:8081"
 npm run dev:frontend
 ```
 
-`QTS_API_ORIGIN` chỉ được Vite dev server đọc. Không đặt secret trong `VITE_*` vì biến đó có thể bị đưa vào browser bundle.
+`QTS_API_ORIGIN` chỉ được Next dev server đọc. Không đặt secret trong biến `NEXT_PUBLIC_*` vì biến đó được đưa vào browser bundle.
 
 ## Dữ liệu và mutation
 
+- Form liên hệ gửi `POST /api/v1/contact-requests`; yêu cầu thành công xuất hiện trên dashboard Internal Portal.
 - Dashboard tải `/api/v1/portal/overview` và tự làm mới 30 giây.
 - Resource list dùng server pagination/search; UI hiện lấy tối đa 100 bản ghi mỗi trang làm việc.
 - Ticket create sinh UUID làm `Idempotency-Key`.
@@ -74,19 +77,24 @@ npm run test:frontend
 npm run typecheck
 npm run lint:frontend
 npm run build:frontend
+npm run preview
 ```
 
-Test bao phủ auth gateway, workspace isolation, CSRF logout, dashboard response thật, empty state và ticket mutation có idempotency.
+`npm run preview` phục vụ static export `frontend/out/` tại `http://127.0.0.1:4173` để smoke test bản build; không dùng server này cho production.
+
+Test bao phủ IAM fail-closed, workspace isolation, CSRF logout, admin intake, empty state và ticket mutation có CSRF/idempotency.
 
 ## Production frontend
 
-1. Chạy `npm run build:frontend`.
-2. Phục vụ `frontend/dist/` qua CDN/static host; không dùng `vite preview` làm production server.
-3. Rewrite SPA route về `index.html`.
+1. Đặt `NEXT_PUBLIC_SITE_URL` thành HTTPS origin chính thức trước khi build để canonical URL, Open Graph, JSON-LD và sitemap không dùng domain minh họa.
+2. Chạy `npm run build:frontend`.
+3. Phục vụ `frontend/out/` qua CDN/static host; mỗi route có `index.html` riêng nhờ `trailingSlash`.
 4. Reverse proxy `/api/*` tới backend dưới cùng public origin.
-5. Bắt buộc HTTPS và security headers tương đương `public/_headers`.
-6. Cache asset có hash dài hạn; HTML entrypoint phải revalidate.
+5. Bắt buộc HTTPS và áp dụng security headers trong `public/_headers`.
+6. Cache `/_next/static/*` immutable; HTML phải revalidate.
 7. Smoke test public/client/internal trên desktop và mobile.
+
+Static export cần `script-src 'unsafe-inline'` cho bootstrap RSC của Next. Khi chuyển sang server rendering, thay bằng CSP nonce theo từng response để loại bỏ ngoại lệ này.
 
 ## Quy tắc bắt buộc
 

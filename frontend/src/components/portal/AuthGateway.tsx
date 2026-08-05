@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   UsersRound,
 } from 'lucide-react';
+import Image from 'next/image';
 
 import { useAuth } from '../../auth/auth-context';
 import { SITE_NAME } from '../../portal/brand';
@@ -21,7 +22,7 @@ export default function AuthGateway() {
     <main className="auth-gateway" data-portal="true">
       <section className="auth-identity" aria-label={`${SITE_NAME} Operations Portal`}>
         <PortalLink className="auth-brand" to="/" aria-label={`${SITE_NAME} - Trang chủ`}>
-          <img alt="Logo khiên QTS" height="72" src="/qts-logo-160.webp" width="72" />
+          <Image alt="Logo khiên QTS" height={72} src="/qts-logo-160.webp" width={72} />
           <span>
             <strong>{SITE_NAME}</strong>
             <small>Cổng vận hành</small>

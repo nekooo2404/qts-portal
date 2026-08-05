@@ -9,6 +9,13 @@ import type { ResourceDefinition, ResourceField } from '../../portal/resource-co
 import type { PortalRecord, TenantOption } from '../../portal/types';
 import { usePortalCollection } from '../../portal/usePortalCollection';
 
+const DATE_FORMATTER = new Intl.DateTimeFormat('vi-VN', {
+  dateStyle: 'medium', timeZone: 'Asia/Ho_Chi_Minh',
+});
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('vi-VN', {
+  dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
+});
+
 interface ResourcePageProps {
   canWrite: boolean;
   definition: ResourceDefinition;
@@ -36,18 +43,16 @@ function displayValue(record: PortalRecord, key: string, format = 'text') {
   if (format === 'status') return <PortalStatus value={value} />;
   if (value === null || value === undefined || value === '') return <span aria-label="Chưa có dữ liệu">—</span>;
   if (format === 'date' && typeof value === 'string') {
-    return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(value));
+    return DATE_FORMATTER.format(new Date(value));
   }
   if (format === 'datetime' && typeof value === 'string') {
-    return new Intl.DateTimeFormat('vi-VN', {
-      dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
-    }).format(new Date(value));
+    return DATE_TIME_FORMATTER.format(new Date(value));
   }
   if (format === 'money') {
     const amount = Number(value);
     const currency = typeof record.currency === 'string' ? record.currency : 'VND';
     return Number.isFinite(amount)
-      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency }).format(amount)
+      ? amount.toLocaleString('vi-VN', { style: 'currency', currency })
       : String(value);
   }
   if (typeof value === 'boolean') return value ? 'Có' : 'Không';
@@ -121,8 +126,8 @@ function ResourceForm({
           <p className="portal-eyebrow">{editing ? 'Cập nhật có kiểm soát phiên bản' : 'Ghi dữ liệu vận hành'}</p>
           <h2>{editing ? `Cập nhật ${definition.title.toLowerCase()}` : definition.createLabel}</h2>
         </div>
-        <button className="portal-icon-button" onClick={onCancel} title="Đóng biểu mẫu" type="button">
-          <X aria-hidden="true" /><span className="sr-only">Đóng biểu mẫu</span>
+        <button aria-label="Đóng biểu mẫu" className="portal-icon-button" onClick={onCancel} type="button">
+          <X aria-hidden="true" />
         </button>
       </header>
       <form onSubmit={(event) => void submit(event)}>
@@ -223,8 +228,8 @@ export default function ResourcePage(props: ResourcePageProps) {
             <p>{definition.description}</p>
           </div>
           <div className="portal-page-header__actions">
-            <button className="portal-icon-button" onClick={collection.reload} title="Tải lại dữ liệu" type="button">
-              <RefreshCw aria-hidden="true" /><span className="sr-only">Tải lại dữ liệu</span>
+            <button aria-label="Tải lại dữ liệu" className="portal-icon-button" onClick={collection.reload} type="button">
+              <RefreshCw aria-hidden="true" />
             </button>
             {canWrite && (
               <button className="portal-button portal-button--primary" onClick={openCreate} type="button">
@@ -246,7 +251,7 @@ export default function ResourcePage(props: ResourcePageProps) {
           />
         )}
 
-        <div className="portal-filter-bar" role="search" aria-label={`Lọc ${definition.title.toLowerCase()}`}>
+        <form className="portal-filter-bar" aria-label={`Lọc ${definition.title.toLowerCase()}`} onSubmit={(event) => event.preventDefault()} role="search">
           <label className="portal-search-field">
             <Search aria-hidden="true" />
             <span className="sr-only">Tìm kiếm</span>
@@ -258,7 +263,7 @@ export default function ResourcePage(props: ResourcePageProps) {
             />
           </label>
           <output>{collection.data.pagination.totalItems} bản ghi</output>
-        </div>
+        </form>
 
         {collection.loading ? <PortalLoading /> : collection.error ? (
           <PortalErrorState error={collection.error} onRetry={collection.reload} />
@@ -289,12 +294,12 @@ export default function ResourcePage(props: ResourcePageProps) {
                     {canWrite && (
                       <td data-label="Thao tác">
                         <button
+                          aria-label="Cập nhật bản ghi"
                           className="portal-icon-button"
                           onClick={() => openEdit(record)}
-                          title="Cập nhật bản ghi"
                           type="button"
                         >
-                          <Pencil aria-hidden="true" /><span className="sr-only">Cập nhật bản ghi</span>
+                          <Pencil aria-hidden="true" />
                         </button>
                       </td>
                     )}

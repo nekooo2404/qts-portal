@@ -2,9 +2,9 @@
 
 ## Trạng thái
 
-Superseded in part by ADR-004
+Superseded in part by ADR-004 and the Next.js App Router migration on 2026-08-04
 
-Các quyết định về npm workspaces, ranh giới frontend/backend và same-origin proxy vẫn còn hiệu lực. ADR-004 thay thế trạng thái backend không có runtime dependency và quyết định trì hoãn IAM bằng Google OIDC cùng session phía backend.
+Các quyết định về npm workspaces, ranh giới frontend/backend và same-origin API vẫn còn hiệu lực. ADR-004 thay thế trạng thái backend không có runtime dependency và quyết định trì hoãn IAM; Next.js development rewrite thay thế Vite proxy.
 
 ## Ngày
 

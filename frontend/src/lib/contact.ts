@@ -85,6 +85,17 @@ export async function submitContactRequest(request: ContactRequest): Promise<Con
     method: 'POST',
   });
 
+  if (!response.ok) {
+    let message = 'QTS chưa thể tiếp nhận yêu cầu lúc này. Vui lòng thử lại.';
+    try {
+      const payload = await response.json() as { error?: { message?: unknown } };
+      if (typeof payload.error?.message === 'string') message = payload.error.message;
+    } catch {
+      // Keep the stable fallback for non-JSON error responses.
+    }
+    throw new Error(message);
+  }
+
   let payload: unknown;
   try {
     payload = await response.json();
@@ -93,15 +104,8 @@ export async function submitContactRequest(request: ContactRequest): Promise<Con
   }
 
   const envelope = typeof payload === 'object' && payload !== null
-    ? payload as { data?: Partial<ContactSubmission>; error?: { message?: unknown } }
+    ? payload as { data?: Partial<ContactSubmission> }
     : {};
-  if (!response.ok) {
-    throw new Error(
-      typeof envelope.error?.message === 'string'
-        ? envelope.error.message
-        : 'QTS chưa thể tiếp nhận yêu cầu lúc này. Vui lòng thử lại.',
-    );
-  }
   if (
     typeof envelope.data?.id !== 'string' ||
     typeof envelope.data.status !== 'string' ||

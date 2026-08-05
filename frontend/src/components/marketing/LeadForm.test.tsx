@@ -1,5 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { submitContactRequest } from '../../lib/contact';
@@ -23,17 +22,18 @@ beforeEach(() => {
 
 describe('LeadForm', () => {
   it('submits the corporate contact contract directly', async () => {
-    const user = userEvent.setup();
     render(<LeadForm />);
 
-    await user.type(screen.getByLabelText('Họ và tên'), 'Nguyễn Minh An');
-    await user.type(screen.getByLabelText('Công ty'), 'Công ty Minh An');
-    await user.type(screen.getByLabelText('Email doanh nghiệp'), 'an@minhan.vn');
-    await user.type(screen.getByLabelText('Số điện thoại'), '0901234567');
-    await user.selectOptions(screen.getByLabelText('Dịch vụ quan tâm'), 'software-development');
-    await user.type(screen.getByLabelText('Nội dung trao đổi'), 'Cần số hóa quy trình phê duyệt hợp đồng nội bộ.');
-    await user.click(screen.getByRole('checkbox'));
-    await user.click(screen.getByRole('button', { name: 'Nhận tư vấn miễn phí' }));
+    fireEvent.change(screen.getByLabelText('Họ và tên'), { target: { value: 'Nguyễn Minh An' } });
+    fireEvent.change(screen.getByLabelText('Công ty'), { target: { value: 'Công ty Minh An' } });
+    fireEvent.change(screen.getByLabelText('Email doanh nghiệp'), { target: { value: 'an@minhan.vn' } });
+    fireEvent.change(screen.getByLabelText('Số điện thoại'), { target: { value: '0901234567' } });
+    fireEvent.change(screen.getByLabelText('Dịch vụ quan tâm'), { target: { value: 'software-development' } });
+    fireEvent.change(screen.getByLabelText('Nội dung trao đổi'), {
+      target: { value: 'Cần số hóa quy trình phê duyệt hợp đồng nội bộ.' },
+    });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Nhận tư vấn miễn phí' }));
 
     await waitFor(() => expect(submitMock).toHaveBeenCalledTimes(1));
     expect(submitMock).toHaveBeenCalledWith({
@@ -50,10 +50,9 @@ describe('LeadForm', () => {
   });
 
   it('focuses the first invalid field and does not submit incomplete data', async () => {
-    const user = userEvent.setup();
     render(<LeadForm />);
 
-    await user.click(screen.getByRole('button', { name: 'Nhận tư vấn miễn phí' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nhận tư vấn miễn phí' }));
 
     await waitFor(() => expect(screen.getByLabelText('Họ và tên')).toHaveFocus());
     expect(screen.getByText(/Hãy chọn dịch vụ cần QTS trao đổi/)).toBeVisible();

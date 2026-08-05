@@ -7,6 +7,10 @@ import { createResource, downloadDocument } from '../../portal/api';
 import type { PortalRecord, TenantOption } from '../../portal/types';
 import { usePortalCollection } from '../../portal/usePortalCollection';
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('vi-VN', {
+  dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
+});
+
 interface DocumentsPageProps {
   canWrite: boolean;
   selectedTenantId?: string;
@@ -16,9 +20,7 @@ interface DocumentsPageProps {
 
 function formatDate(value: unknown): string {
   if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) return 'Chưa phát hành';
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(new Date(value));
+  return DATE_TIME_FORMATTER.format(new Date(value));
 }
 
 function contentBase64(file: File): Promise<string> {
@@ -132,7 +134,7 @@ function DocumentRow({ document, onError }: { document: PortalRecord; onError: (
       anchor.href = url;
       anchor.download = result.filename;
       anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      URL.revokeObjectURL(url);
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Không thể tải tài liệu.');
     } finally {
@@ -176,10 +178,10 @@ export default function DocumentsPage(props: DocumentsPageProps) {
         </div>
       </header>
       {formOpen && <UploadForm onClose={() => setFormOpen(false)} onCreated={(value) => { setMessage(value); collection.reload(); }} props={props} />}
-      <div className="portal-filter-bar" role="search" aria-label="Lọc tài liệu">
+      <form className="portal-filter-bar" aria-label="Lọc tài liệu" onSubmit={(event) => event.preventDefault()} role="search">
         <label className="portal-search-field"><Search aria-hidden="true" /><span className="sr-only">Tìm tài liệu</span><input onChange={(event) => setQuery(event.target.value)} placeholder="Tìm tiêu đề hoặc tên tệp" type="search" value={query} /></label>
         <output>{collection.data.pagination.totalItems} tài liệu</output>
-      </div>
+      </form>
       <p className="portal-action-status" aria-live="polite">{message}</p>
       {collection.loading ? <PortalLoading /> : collection.error ? <PortalErrorState error={collection.error} onRetry={collection.reload} /> : collection.data.data.length === 0 ? (
         <PortalEmptyState title="Chưa có tài liệu" description="Chưa có tài liệu nào được phát hành cho phạm vi hiện tại." />

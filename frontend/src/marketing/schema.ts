@@ -11,18 +11,6 @@ export function organizationSchema(): Record<string, unknown> {
   };
 }
 
-export function localBusinessSchema(): Record<string, unknown> {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    name: SITE_NAME,
-    telephone: '[SỐ ĐIỆN THOẠI]',
-    email: '[EMAIL]',
-    address: '[ĐỊA CHỈ]',
-    openingHours: '[GIỜ LÀM VIỆC]',
-  };
-}
-
 export function serviceSchema(service: Service): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',

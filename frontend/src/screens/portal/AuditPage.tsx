@@ -6,11 +6,13 @@ import { PortalStatus } from '../../components/portal/PortalStatus';
 import { listSpecialResource } from '../../portal/api';
 import type { CollectionResponse, LoadState } from '../../portal/types';
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('vi-VN', {
+  dateStyle: 'short', timeStyle: 'medium', timeZone: 'Asia/Ho_Chi_Minh',
+});
+
 function formatTime(value: unknown): string {
   if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) return 'Chưa có';
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short', timeStyle: 'medium', timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(new Date(value));
+  return DATE_TIME_FORMATTER.format(new Date(value));
 }
 
 export default function AuditPage({ selectedTenantId }: { selectedTenantId?: string }) {
@@ -45,10 +47,10 @@ export default function AuditPage({ selectedTenantId }: { selectedTenantId?: str
         <div><p className="portal-eyebrow">Tổ chức · Append only</p><h1>Nhật ký hoạt động</h1><p>Theo dõi đăng nhập, thay đổi cấu hình, tải tài liệu và thao tác nghiệp vụ theo phạm vi tổ chức.</p></div>
         <button className="portal-icon-button" onClick={reload} title="Tải lại audit log" type="button"><RefreshCw aria-hidden="true" /><span className="sr-only">Tải lại</span></button>
       </header>
-      <div className="portal-filter-bar" role="search" aria-label="Lọc nhật ký hoạt động">
+      <form className="portal-filter-bar" aria-label="Lọc nhật ký hoạt động" onSubmit={(event) => event.preventDefault()} role="search">
         <label className="portal-search-field"><Search aria-hidden="true" /><span className="sr-only">Tìm audit log</span><input onChange={(event) => setQuery(event.target.value)} placeholder="Tìm action hoặc resource ID" type="search" value={query} /></label>
         <output>{collection?.pagination.totalItems ?? 0} sự kiện</output>
-      </div>
+      </form>
       {state.status === 'loading' ? <PortalLoading label="Đang đọc audit log" /> : state.status === 'error' ? <PortalErrorState error={state.error} onRetry={reload} /> : state.data.data.length === 0 ? (
         <PortalEmptyState title="Chưa có sự kiện kiểm toán" description="Sự kiện sẽ xuất hiện sau khi có thao tác thật trong phạm vi này." />
       ) : (

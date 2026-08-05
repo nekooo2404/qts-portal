@@ -8,6 +8,10 @@ import { createResource, createTicketComment, listTicketComments, updateResource
 import type { LoadState, PortalRecord, TenantOption } from '../../portal/types';
 import { usePortalCollection } from '../../portal/usePortalCollection';
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('vi-VN', {
+  dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
+});
+
 interface TicketsPageProps {
   canCreate: boolean;
   canManage: boolean;
@@ -18,9 +22,7 @@ interface TicketsPageProps {
 
 function formatTime(value: unknown): string {
   if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) return 'Chưa có';
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(new Date(value));
+  return DATE_TIME_FORMATTER.format(new Date(value));
 }
 
 function TicketCreateForm({ props, onClose, onCreated }: {
@@ -31,7 +33,7 @@ function TicketCreateForm({ props, onClose, onCreated }: {
   const { selectedTenantId, session, tenants } = props;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const idempotencyKey = useRef(crypto.randomUUID());
+  const idempotencyKey = useRef<string | null>(null);
   const isInternal = session.authorization.workspace === 'internal';
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -49,8 +51,10 @@ function TicketCreateForm({ props, onClose, onCreated }: {
     setSubmitting(true);
     setError('');
     try {
-      const created = await createResource('tickets', body, session.csrfToken, idempotencyKey.current);
-      idempotencyKey.current = crypto.randomUUID();
+      const requestKey = idempotencyKey.current ?? crypto.randomUUID();
+      idempotencyKey.current = requestKey;
+      const created = await createResource('tickets', body, session.csrfToken, requestKey);
+      idempotencyKey.current = null;
       onCreated(`Đã tạo ${created.reference ? String(created.reference) : 'ticket mới'}.`);
       onClose();
     } catch (reason) {
@@ -246,10 +250,10 @@ export default function TicketsPage(props: TicketsPageProps) {
         {formOpen && <TicketCreateForm onClose={() => setFormOpen(false)} onCreated={(value) => { setMessage(value); collection.reload(); }} props={props} />}
         <p className="portal-action-status" aria-live="polite">{message}</p>
 
-        <div className="portal-filter-bar" role="search" aria-label="Lọc ticket">
+        <form className="portal-filter-bar" aria-label="Lọc ticket" onSubmit={(event) => event.preventDefault()} role="search">
           <label className="portal-search-field"><Search aria-hidden="true" /><span className="sr-only">Tìm ticket</span><input onChange={(event) => setQuery(event.target.value)} placeholder="Tìm tiêu đề, mô tả hoặc người phụ trách" type="search" value={query} /></label>
           <output>{collection.data.pagination.totalItems} ticket</output>
-        </div>
+        </form>
 
         {collection.loading ? <PortalLoading /> : collection.error ? (
           <PortalErrorState error={collection.error} onRetry={collection.reload} />

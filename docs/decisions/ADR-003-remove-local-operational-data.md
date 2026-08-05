@@ -2,7 +2,7 @@
 
 ## Trạng thái
 
-Accepted
+Accepted. Điều khoản History API/SPA fallback đã được thay thế bởi Next.js App Router.
 
 ## Ngày
 
@@ -28,7 +28,7 @@ QTS Portal thuộc lĩnh vực an ninh mạng. Khi chưa có IdP, tenant model, 
 
 ## Phạm vi thay thế
 
-ADR này thay thế ADR-001 mục 4, 5 và 7 cùng các giả định runtime tương ứng trong đặc tả/kế hoạch cũ. ADR-001 vẫn có giá trị lịch sử; quyết định History API và SPA fallback tiếp tục được sử dụng. ADR-002 về ranh giới frontend/backend vẫn còn hiệu lực.
+ADR này thay thế ADR-001 mục 4, 5 và 7 cùng các giả định runtime tương ứng trong đặc tả/kế hoạch cũ. ADR-001 vẫn có giá trị lịch sử; quyết định History API và SPA fallback đã được thay thế bởi Next.js App Router theo cập nhật ngày 2026-08-05. ADR-002 về ranh giới frontend/backend vẫn còn hiệu lực.
 
 ## Các phương án đã cân nhắc
 

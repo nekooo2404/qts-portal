@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
 const footerGroups = [
@@ -40,7 +41,7 @@ export function SiteFooter() {
       <div className="qts-shell qts-footer__grid">
         <div className="qts-footer__mast">
           <Link className="qts-brand qts-brand--footer" href="/">
-            <img src="/qts-logo-160.webp" width="44" height="44" alt="" loading="lazy" />
+            <Image src="/qts-logo-160.webp" width={44} height={44} alt="" />
             <span><strong>QTS Việt Nam</strong><small>Thiết kế website · Phần mềm · Giải pháp công nghệ</small></span>
           </Link>
           <p>Website, phần mềm, hạ tầng, marketing và hỗ trợ kỹ thuật được quản lý trên một hệ thống.</p>

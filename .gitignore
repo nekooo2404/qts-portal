@@ -8,7 +8,17 @@ coverage/
 *.key
 output/
 out/
+storybook-static/
+.next/
+next-env.d.ts
 .hallmark/
+.superpowers/
+.tmp/
+.claude/
 .playwright-cli/
+.playwright-mcp/
+baseline-*.png
+redesign-*.png
+qts-home-*.png
 *.tsbuildinfo
 *.log

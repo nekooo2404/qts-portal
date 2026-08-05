@@ -15,6 +15,12 @@ import ResourcePage from './ResourcePage';
 import TeamPage from './TeamPage';
 import TicketsPage from './TicketsPage';
 
+const RESOURCE_BY_PATH = {
+  alerts: 'alerts', assets: 'assets', licenses: 'licenses', customers: 'tenants',
+  contracts: 'contracts', invoices: 'invoices', knowledge: 'knowledge',
+  integrations: 'integrations', shifts: 'shifts',
+} as const;
+
 function AccessDenied() {
   return (
     <main className="portal-main" id="portal-main"><div className="portal-page"><div className="portal-state" role="alert"><ShieldX aria-hidden="true" /><strong>Không có quyền truy cập chức năng</strong><p>Role trong session hiện tại không có quyền đọc module này.</p></div></div></main>
@@ -78,13 +84,8 @@ export default function PortalWorkspace({
   } else if (canonicalPath.endsWith('/audit')) {
     page = <AuditPage key={pageKey} selectedTenantId={selectedTenantId} />;
   } else {
-    const resourceByPath = {
-      alerts: 'alerts', assets: 'assets', licenses: 'licenses', customers: 'tenants',
-      contracts: 'contracts', invoices: 'invoices', knowledge: 'knowledge',
-      integrations: 'integrations', shifts: 'shifts',
-    } as const;
-    const segment = canonicalPath.split('/').at(-1) as keyof typeof resourceByPath;
-    const resource = resourceByPath[segment];
+    const segment = canonicalPath.split('/').at(-1) as keyof typeof RESOURCE_BY_PATH;
+    const resource = RESOURCE_BY_PATH[segment];
     page = resource ? (
       <ResourcePage
         {...common}

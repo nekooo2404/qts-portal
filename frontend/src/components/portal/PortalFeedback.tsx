@@ -1,9 +1,16 @@
-import { AlertTriangle, Inbox, LoaderCircle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Inbox, RefreshCw } from 'lucide-react';
+
+import { Button } from '../ui/Button';
+import { Skeleton } from '../ui/Skeleton';
 
 export function PortalLoading({ label = 'Đang tải dữ liệu' }: { label?: string }) {
   return (
     <div className="portal-state" role="status">
-      <LoaderCircle className="portal-spinner" aria-hidden="true" />
+      <div className="portal-state__skeleton" aria-hidden="true">
+        <Skeleton className="portal-skeleton--heading" />
+        <Skeleton />
+        <Skeleton />
+      </div>
       <p>{label}</p>
     </div>
   );
@@ -15,9 +22,9 @@ export function PortalErrorState({ error, onRetry }: { error: Error; onRetry: ()
       <AlertTriangle aria-hidden="true" />
       <strong>Không thể tải dữ liệu</strong>
       <p>{error.message}</p>
-      <button className="portal-button portal-button--secondary" onClick={onRetry} type="button">
+      <Button onClick={onRetry} type="button">
         <RefreshCw aria-hidden="true" /> Thử lại
-      </button>
+      </Button>
     </div>
   );
 }
@@ -25,7 +32,7 @@ export function PortalErrorState({ error, onRetry }: { error: Error; onRetry: ()
 export function PortalEmptyState({ title, description }: { title: string; description: string }) {
   return (
     <div className="portal-empty-state">
-      <Inbox aria-hidden="true" />
+      <span className="portal-empty-state__icon"><Inbox aria-hidden="true" /></span>
       <strong>{title}</strong>
       <p>{description}</p>
     </div>

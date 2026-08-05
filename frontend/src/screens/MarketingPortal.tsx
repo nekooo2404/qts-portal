@@ -101,7 +101,7 @@ export default function MarketingPortal() {
               <p className="qts-eyebrow"><span /> QTS One · Nền tảng vận hành công nghệ</p>
               <h1 id="hero-title">Một nền tảng quản lý toàn bộ dịch vụ công nghệ của doanh nghiệp</h1>
               <p className="qts-hero__lede">
-                Từ website, phần mềm, quảng cáo đến hạ tầng và hỗ trợ kỹ thuật — được quản lý tập trung trên QTS One.
+                Từ website, phần mềm, quảng cáo đến hạ tầng và hỗ trợ kỹ thuật, tất cả được quản lý tập trung trên QTS One.
               </p>
               <div className="qts-hero__actions">
                 <Link className="qts-button qts-button--primary" href="/lien-he">

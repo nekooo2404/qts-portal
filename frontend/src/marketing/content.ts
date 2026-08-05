@@ -1,4 +1,4 @@
-import { SITE_NAME, siteUrl } from './site';
+import { SITE_NAME } from './site';
 
 export type MarketingLink = {
   href: string;
@@ -49,7 +49,6 @@ export interface PlaceholderProject {
   architecture: string[];
 }
 
-export type CaseStudy = PlaceholderProject;
 
 export interface PlaceholderArticle {
   slug: string;
@@ -272,6 +271,3 @@ export function getService(slug: string): Service | undefined { return services.
 export function getSolution(slug: string): Solution | undefined { return solutions.find((solution) => solution.slug === slug); }
 export function getProject(slug: string): PlaceholderProject | undefined { return caseStudies.find((project) => project.slug === slug); }
 export function getArticle(slug: string): PlaceholderArticle | undefined { return articles.find((article) => article.slug === slug); }
-export function getCaseStudy(slug: string): CaseStudy | undefined { return getProject(slug); }
-
-export const publicStructuredData = { url: siteUrl('/'), name: SITE_NAME };

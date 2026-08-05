@@ -1,7 +1,8 @@
-# QTS Operations Portal
+# QTS One Portal
 
-QTS Operations Portal là hệ thống quản trị công nghệ và an ninh mạng đa tenant dành cho QTS Việt Nam. Một backend dùng chung cung cấp hai không gian được phân quyền độc lập:
+QTS One là nền tảng dịch vụ số hợp nhất dành cho QTS Việt Nam. Một backend dùng chung phục vụ ba bề mặt sản phẩm với ranh giới truy cập rõ ràng:
 
+- **Corporate Website**: giới thiệu năng lực, dịch vụ, giải pháp, dự án và tiếp nhận yêu cầu tư vấn doanh nghiệp.
 - **Client Portal**: khách hàng theo dõi cảnh báo, tài sản, license, ticket/SLA, hợp đồng, hóa đơn, báo cáo và tài khoản thuộc tenant của mình.
 - **Internal Portal**: SOC, kỹ sư, account manager và quản trị viên QTS giám sát nhiều khách hàng, điều phối sự cố, quản lý tích hợp, ca trực và audit.
 
@@ -13,6 +14,7 @@ Portal dùng Google OAuth 2.0/OpenID Connect theo Authorization Code Flow. Backe
 
 | Nhóm | Đã triển khai |
 | --- | --- |
+| Corporate Website | Trang marketing đa route, SEO metadata, service/solution detail, tìm kiếm và form tư vấn |
 | IAM | Google OIDC, `state`, `nonce`, PKCE S256, kiểm tra claim, membership theo `iss + sub`, session PostgreSQL, CSRF, RBAC |
 | Multi-tenant | Tenant scope lấy từ session, internal scope có chọn tenant, PostgreSQL Row-Level Security |
 | Client Portal | Dashboard, cảnh báo, ticket, tài sản, license, hợp đồng, hóa đơn, tài liệu, knowledge base, thành viên, audit |
@@ -30,9 +32,9 @@ Browser
   |
   | HTTPS, same-origin cookie
   v
-Frontend React/Vite
-  |-- /company
-  |-- /client/*
+Frontend Next.js App Router
+  |-- website công khai
+  |-- /portal/*
   |-- /admin/*
   |
   | /api/*
@@ -60,10 +62,10 @@ Frontend và backend tách rõ trách nhiệm:
 
 ```text
 qts-portal/
-|-- frontend/                     # React 19 + TypeScript + Vite
-|   |-- src/auth/                 # Auth state và route gateway
-|   |-- src/components/portal/    # Shell, status và feedback state
-|   |-- src/pages/portal/         # Client/Internal workspace
+|-- frontend/                     # Next.js 16 + React 19 + TypeScript
+|   |-- src/app/                  # Route, metadata và static generation
+|   |-- src/components/           # Marketing, portal và UI primitives
+|   |-- src/screens/              # Website và Client/Internal workspace
 |   `-- src/portal/               # API client, permission, resource config
 |-- backend/                      # Node.js ESM HTTP API
 |   |-- src/app.js                # Route HTTP, cookie, CSRF, body limit
@@ -85,7 +87,7 @@ qts-portal/
 | Lớp | Công nghệ | Vai trò |
 | --- | --- | --- |
 | Frontend | React `19.2.8`, TypeScript `6.0.3` | UI component và type-safe client |
-| Build | Vite `7.3.6` | Dev server, proxy `/api`, production bundle |
+| Build | Next.js `16.3.0` | App Router, dev rewrite `/api`, static export và metadata |
 | UI | CSS custom properties, Lucide React | Design system, responsive layout và icon |
 | Backend | Node.js native HTTP, ESM | API, lifecycle, timeout và graceful shutdown |
 | OIDC | `openid-client` `6.8.4` | Discovery, PKCE, token exchange, JWKS/ID token validation |
@@ -103,17 +105,17 @@ Elasticsearch, Kubernetes và cloud provider chưa được đưa vào repositor
 
 | Route | Chức năng |
 | --- | --- |
-| `/client/overview` | Chỉ số cảnh báo, ticket/SLA, sức khỏe tài sản, license và xu hướng 7 ngày |
-| `/client/alerts` | Xem cảnh báo trong đúng tenant |
-| `/client/tickets` | Tạo ticket, theo dõi SLA, trao đổi với QTS |
-| `/client/assets` | Xem tài sản, criticality, health và lần ghi nhận cuối |
-| `/client/licenses` | Theo dõi license, số lượng và ngày hết hạn |
-| `/client/contracts` | Xem hợp đồng và thời hạn |
-| `/client/invoices` | Xem hóa đơn và trạng thái thanh toán |
-| `/client/documents` | Xem/tải báo cáo và tài liệu được cấp quyền |
-| `/client/knowledge` | Xem knowledge base dành cho khách hàng |
-| `/client/team` | `client_admin` mời, đổi role hoặc vô hiệu hóa thành viên tenant |
-| `/client/audit` | Xem hoạt động thuộc tenant theo quyền |
+| `/portal/overview` | Chỉ số cảnh báo, ticket/SLA, sức khỏe tài sản, license và xu hướng 7 ngày |
+| `/portal/alerts` | Xem cảnh báo trong đúng tenant |
+| `/portal/tickets` | Tạo ticket, theo dõi SLA, trao đổi với QTS |
+| `/portal/assets` | Xem tài sản, criticality, health và lần ghi nhận cuối |
+| `/portal/licenses` | Theo dõi license, số lượng và ngày hết hạn |
+| `/portal/contracts` | Xem hợp đồng và thời hạn |
+| `/portal/invoices` | Xem hóa đơn và trạng thái thanh toán |
+| `/portal/documents` | Xem/tải báo cáo và tài liệu được cấp quyền |
+| `/portal/knowledge` | Xem knowledge base dành cho khách hàng |
+| `/portal/team` | `client_admin` mời, đổi role hoặc vô hiệu hóa thành viên tenant |
+| `/portal/audit` | Xem hoạt động thuộc tenant theo quyền |
 
 ### 5.2. Internal Portal
 
@@ -177,7 +179,7 @@ docker compose version
 ### Bước 1: cài dependency
 
 ```powershell
-cd D:\hoapuiii\Code\qts-portal
+cd D:\Projects\qts-portal
 npm ci
 ```
 
@@ -231,7 +233,7 @@ Backend cũng tự chạy các migration chưa áp dụng khi khởi động. Mi
 Mở terminal thứ nhất:
 
 ```powershell
-cd D:\hoapuiii\Code\qts-portal
+cd D:\Projects\qts-portal
 npm run dev:backend:env
 ```
 
@@ -248,11 +250,11 @@ Invoke-RestMethod http://127.0.0.1:8080/api/v1/auth/status
 Mở terminal thứ hai:
 
 ```powershell
-cd D:\hoapuiii\Code\qts-portal
+cd D:\Projects\qts-portal
 npm run dev:frontend
 ```
 
-Mở **`http://localhost:5173`**. Không đổi qua lại giữa `localhost` và `127.0.0.1` trong một luồng OIDC vì cookie giao dịch và redirect URI phụ thuộc hostname chính xác.
+Mở **`http://127.0.0.1:3000`**. Không đổi qua lại giữa `localhost` và `127.0.0.1` trong một luồng OIDC vì cookie giao dịch và redirect URI phụ thuộc hostname chính xác.
 
 ## 9. Tạo Google OAuth Client
 
@@ -263,8 +265,8 @@ Mở **`http://localhost:5173`**. Không đổi qua lại giữa `localhost` và
 5. Khai báo local development:
 
 ```text
-Authorized JavaScript origin: http://localhost:5173
-Authorized redirect URI:      http://localhost:5173/api/v1/auth/callback/google
+Authorized JavaScript origin: http://127.0.0.1:3000
+Authorized redirect URI:      http://127.0.0.1:3000/api/v1/auth/callback/google
 ```
 
 6. Khai báo production bằng public HTTPS origin thực tế:
@@ -277,7 +279,7 @@ Authorized redirect URI:      https://portal.example.vn/api/v1/auth/callback/goo
 7. Điền Client ID và Client Secret vào `backend/.env`:
 
 ```dotenv
-QTS_PUBLIC_ORIGIN=http://localhost:5173
+QTS_PUBLIC_ORIGIN=http://127.0.0.1:3000
 QTS_AUTH_COOKIE_SECURE=false
 GOOGLE_CLIENT_ID=<client-id>.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=<client-secret>
@@ -285,7 +287,7 @@ GOOGLE_WORKSPACE_DOMAIN=
 QTS_AUTH_MEMBERSHIPS_JSON=[]
 ```
 
-`GOOGLE_CLIENT_SECRET` chỉ tồn tại ở backend `.env`/secret manager. Không đặt secret trong biến `VITE_*`, frontend, Docker image, log, ticket hay Git.
+`GOOGLE_CLIENT_SECRET` chỉ tồn tại ở backend `.env`/secret manager. Không đặt secret trong biến `NEXT_PUBLIC_*`, frontend, Docker image, log, ticket hay Git.
 
 Nếu chỉ cho phép tài khoản Google Workspace QTS, điền domain thực tế vào `GOOGLE_WORKSPACE_DOMAIN`. Backend kiểm tra claim `hd`; kiểm tra đuôi email không được dùng thay thế. MFA/2-Step Verification phải được cưỡng chế bằng chính sách Google Workspace vì ID token của luồng này không chứng minh riêng từng lần đăng nhập đã step-up MFA.
 
@@ -357,7 +359,7 @@ docker exec $qtsDatabaseContainer psql -U qts -d qts_portal -c "SELECT actor_iss
 QTS_AUTH_MEMBERSHIPS_JSON=[{"issuer":"https://accounts.google.com","subject":"<actor_subject>","tenantId":"qts-vn","role":"qts_admin"}]
 ```
 
-Khởi động lại backend. Startup sẽ tạo tenant `qts-vn` nếu chưa có và upsert membership. Đăng nhập lại tại `http://localhost:5173`; tài khoản sẽ vào `/admin/soc`.
+Khởi động lại backend. Startup sẽ tạo tenant `qts-vn` nếu chưa có và upsert membership. Đăng nhập lại tại `http://127.0.0.1:3000`; tài khoản sẽ vào `/admin/soc`.
 
 Lưu ý quan trọng: membership còn nằm trong `QTS_AUTH_MEMBERSHIPS_JSON` sẽ được upsert lại sau mỗi lần backend khởi động. Sau khi bootstrap thành công và có ít nhất một quản trị viên dự phòng, có thể đổi biến về `[]`; record trong PostgreSQL vẫn tồn tại và từ đó được quản lý qua portal. Nếu giữ entry làm break-glass account, phải quản trị file/secret và quy trình phê duyệt tương ứng.
 
@@ -372,6 +374,7 @@ Sau khi có `qts_admin`, không cần lấy `sub` thủ công cho từng ngườ
 5. Gửi đường dẫn portal cho người dùng qua kênh đã được QTS phê duyệt. Hệ thống hiện chưa tự gửi email.
 6. Ở lần đăng nhập Google đầu tiên, backend khớp email lời mời, kiểm tra `email_verified`, tạo membership theo `iss + sub` và đánh dấu lời mời `ACCEPTED`.
 7. Những lần sau backend chỉ định danh bằng `iss + sub`, không dùng email làm ID.
+8. Lời mời `PENDING` có thể được thu hồi; thao tác yêu cầu optimistic version, đúng tenant/workspace và được ghi audit.
 
 `qts_admin` có thể mời role client và internal. `client_admin` chỉ có thể mời/quản lý `client_admin`, `client_viewer`, `billing`, `technical` trong tenant của mình.
 
@@ -461,6 +464,7 @@ Audit database không thay thế hệ thống lưu trữ bất biến/WORM độ
 | `GET` | `/api/v1/auth/callback/google` | Callback backend |
 | `GET` | `/api/v1/auth/session` | Lấy user, role, tenant, workspace và CSRF token |
 | `POST` | `/api/v1/auth/logout` | Thu hồi session |
+| `POST` | `/api/v1/contact-requests` | Tiếp nhận yêu cầu tư vấn công khai từ trang công ty |
 | `GET` | `/api/v1/portal/overview` | Dashboard tổng hợp |
 | `GET`, `POST` | `/api/v1/portal/{resource}` | Danh sách/tạo `alerts`, `tickets`, `assets`, `licenses`, `tenants`, `contracts`, `invoices`, `documents`, `knowledge`, `integrations`, `shifts` |
 | `PATCH` | `/api/v1/portal/{resource}/{id}` | Cập nhật resource hỗ trợ; documents không patch |
@@ -468,9 +472,10 @@ Audit database không thay thế hệ thống lưu trữ bất biến/WORM độ
 | `GET` | `/api/v1/portal/documents/{id}/download` | Tải tài liệu sau authorization |
 | `GET`, `PATCH` | `/api/v1/portal/members[/{id}]` | Liệt kê/cập nhật thành viên |
 | `GET`, `POST` | `/api/v1/portal/invitations` | Liệt kê/tạo lời mời |
+| `PATCH` | `/api/v1/portal/invitations/{id}` | Thu hồi lời mời `PENDING` bằng optimistic version |
 | `GET` | `/api/v1/portal/audit` | Tra cứu audit |
 
-Tất cả portal API yêu cầu session cookie. Mutation yêu cầu thêm header `X-CSRF-Token`; tạo ticket yêu cầu `Idempotency-Key` dài 8–128 ký tự. List endpoint hỗ trợ `page`, `pageSize` tối đa 100, `search`, `sortBy`, `sortOrder`, `tenantId` và filter theo resource.
+Endpoint contact công khai không yêu cầu session, được validate phía server và giới hạn 5 lần trong 10 phút theo địa chỉ nguồn. Yêu cầu mới chỉ xuất hiện trong dashboard Internal Portal của `account_manager` và `qts_admin`. Tất cả portal API yêu cầu session cookie. Mutation portal yêu cầu thêm header `X-CSRF-Token`; tạo ticket yêu cầu `Idempotency-Key` dài 8–128 ký tự. List endpoint hỗ trợ `page`, `pageSize` tối đa 100, `search`, `sortBy`, `sortOrder`, `tenantId` và filter theo resource.
 
 Error envelope thống nhất:
 
@@ -490,7 +495,7 @@ Xem hợp đồng chi tiết tại [docs/api/openapi.yaml](docs/api/openapi.yaml
 
 | Lệnh | Mục đích |
 | --- | --- |
-| `npm run dev:frontend` | Vite dev server có HMR |
+| `npm run dev:frontend` | Next dev server có Fast Refresh và rewrite `/api/*` |
 | `npm run dev:backend:env` | Backend watch mode, đọc `backend/.env` |
 | `npm run start:backend:env` | Backend không watch, đọc `backend/.env` |
 | `npm run db:migrate:env --workspace @qts/backend` | Áp dụng migration chưa chạy |
@@ -594,8 +599,8 @@ Production phải dùng backup mã hóa, PITR, retention, restore drill và RPO/
 | Hiện tượng | Nguyên nhân thường gặp | Cách xử lý |
 | --- | --- | --- |
 | `MEMBERSHIP_NOT_FOUND` | Google account hợp lệ nhưng chưa có membership/lời mời | Lấy `iss + sub` từ audit để bootstrap tài khoản đầu tiên hoặc tạo lời mời qua portal |
-| `INVALID_AUTH_TRANSACTION` | Trộn `localhost`/`127.0.0.1`, cookie cũ, callback lặp lại hoặc transaction hết hạn | Dùng duy nhất `http://localhost:5173`, xóa cookie site local và bắt đầu login mới |
-| Google `redirect_uri_mismatch` | Redirect URI trên Google không khớp tuyệt đối | Đặt đúng `http://localhost:5173/api/v1/auth/callback/google` và `QTS_PUBLIC_ORIGIN` |
+| `INVALID_AUTH_TRANSACTION` | Trộn `localhost`/`127.0.0.1`, cookie cũ, callback lặp lại hoặc transaction hết hạn | Dùng duy nhất `http://127.0.0.1:3000`, xóa cookie site local và bắt đầu login mới |
+| Google `redirect_uri_mismatch` | Redirect URI trên Google không khớp tuyệt đối | Đặt đúng `http://127.0.0.1:3000/api/v1/auth/callback/google` và `QTS_PUBLIC_ORIGIN` |
 | Auth báo chưa cấu hình | Thiếu Client ID, Client Secret hoặc memberships JSON | Kiểm tra đủ ba biến; mảng `[]` là hợp lệ |
 | Backend không khởi động vì database | Container chưa ready, password/URL lệch hoặc port bị chiếm | Kiểm tra `docker compose ... ps`, log database và hai giá trị password |
 | `QTS_DATA_ENCRYPTION_KEY must decode...` | Khóa không phải Base64 32 byte | Sinh lại bằng lệnh Node ở phần setup; không dùng chuỗi tùy ý |

@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
+import Image from 'next/image';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import type { PortalSession } from '../../auth/types';
@@ -69,7 +70,7 @@ export default function PortalShell({
     const rail = railRef.current;
     const previousOverflow = document.body.style.overflow;
     const previousRootOverflow = document.documentElement.style.overflow;
-    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    closeButtonRef.current?.focus();
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
 
@@ -104,7 +105,6 @@ export default function PortalShell({
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      window.cancelAnimationFrame(focusFrame);
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousOverflow;
       document.documentElement.style.overflow = previousRootOverflow;
@@ -127,7 +127,7 @@ export default function PortalShell({
       >
         <div className="portal-rail__brand">
           <PortalLink to={workspaceBrand.homePath}>
-            <img alt="Logo khiên QTS" height="40" src="/qts-logo-160.webp" width="40" />
+            <Image alt="Logo khiên QTS" height={40} src="/qts-logo-160.webp" width={40} />
             <span><strong>{SITE_NAME}</strong><small>{workspaceBrand.label}</small></span>
           </PortalLink>
           <Tooltip content={railCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}>
