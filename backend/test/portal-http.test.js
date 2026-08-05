@@ -42,6 +42,14 @@ function createPortalServiceStub() {
   const calls = [];
   return {
     calls,
+    async createContactRequest(input) {
+      calls.push({ method: "createContactRequest", input });
+      return {
+        id: "contact-001",
+        status: "NEW",
+        createdAt: "2026-08-03T08:00:00.000Z",
+      };
+    },
     async getOverview(input) {
       calls.push({ method: "getOverview", input });
       return { metrics: { openAlerts: 0 }, generatedAt: "2026-08-03T08:00:00.000Z" };
@@ -67,13 +75,21 @@ function createPortalServiceStub() {
         content: Buffer.from("%PDF-test"),
       };
     },
+    async revokeInvitation(input) {
+      calls.push({ method: "revokeInvitation", input });
+      return { id: input.id, status: "REVOKED", version: 2 };
+    },
   };
 }
 
-async function request(path, { method = "GET", body, headers = {}, portalService } = {}) {
+async function request(
+  path,
+  { method = "GET", body, headers = {}, portalService, handlerOptions = {} } = {},
+) {
   const server = createServer(createRequestHandler({
     authService: createAuthServiceStub(),
     portalService: portalService ?? createPortalServiceStub(),
+    ...handlerOptions,
   }));
   servers.add(server);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -88,6 +104,66 @@ async function request(path, { method = "GET", body, headers = {}, portalService
     method,
   });
 }
+
+test("POST contact request không cần session và chuyển context vào service", async () => {
+  const portalService = createPortalServiceStub();
+  const response = await request("/api/v1/contact-requests", {
+    method: "POST",
+    body: {
+      name: "Nguyễn Minh An",
+      company: "Công ty Minh An",
+      email: "prospect@example.vn",
+      phone: "0901234567",
+      service: "it-solutions",
+      message: "Cần đánh giá bề mặt tấn công trước đợt phát hành mới.",
+      consent: true,
+    },
+    headers: { Cookie: "" },
+    portalService,
+  });
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(await response.json(), {
+    data: {
+      id: "contact-001",
+      status: "NEW",
+      createdAt: "2026-08-03T08:00:00.000Z",
+    },
+  });
+  const call = portalService.calls[0];
+  assert.equal(call.method, "createContactRequest");
+  assert.equal(call.input.input.name, "Nguyễn Minh An");
+  assert.equal(call.input.input.phone, "0901234567");
+  assert.equal(call.input.input.email, "prospect@example.vn");
+  assert.match(call.input.context.requestId, /^[A-Za-z0-9-]{8,64}$/);
+});
+
+test("POST contact request áp dụng rate limit riêng", async () => {
+  const portalService = createPortalServiceStub();
+  const response = await request("/api/v1/contact-requests", {
+    method: "POST",
+    body: {
+      name: "Nguyễn Minh An",
+      company: "Công ty Minh An",
+      email: "prospect@example.vn",
+      phone: "0901234567",
+      service: "it-solutions",
+      message: "Cần đánh giá bề mặt tấn công trước đợt phát hành mới.",
+      consent: true,
+    },
+    handlerOptions: {
+      contactRateLimiter: {
+        allow: () => false,
+        retryAfterSeconds: () => 60,
+      },
+    },
+    portalService,
+  });
+
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("retry-after"), "60");
+  assert.equal(portalService.calls.length, 0);
+});
 
 test("GET overview bắt buộc session và trả request id", async () => {
   const portalService = createPortalServiceStub();
@@ -136,6 +212,26 @@ test("mutation từ chối CSRF sai trước khi gọi portal service", async ()
 
   assert.equal(response.status, 403);
   assert.equal(portalService.calls.length, 0);
+});
+
+test("PATCH invitation chuyển yêu cầu thu hồi đã xác thực vào service", async () => {
+  const portalService = createPortalServiceStub();
+  const id = "00000000-0000-4000-8000-000000000001";
+  const response = await request(`/api/v1/portal/invitations/${id}`, {
+    method: "PATCH",
+    body: { status: "REVOKED", expectedVersion: 1 },
+    headers: { "X-CSRF-Token": "csrf-001" },
+    portalService,
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    data: { id, status: "REVOKED", version: 2 },
+  });
+  const call = portalService.calls[0];
+  assert.equal(call.method, "revokeInvitation");
+  assert.deepEqual(call.input.input, { status: "REVOKED", expectedVersion: 1 });
+  assert.equal(call.input.actor.authorization.role, "qts_admin");
 });
 
 test("download tài liệu trả binary và checksum", async () => {

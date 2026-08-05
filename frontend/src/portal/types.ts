@@ -1,3 +1,5 @@
+import type { ServiceInterest } from '../marketing/content';
+
 export type PortalResource =
   | 'alerts'
   | 'tickets'
@@ -17,6 +19,17 @@ export interface PortalRecord {
   tenantName?: string | null;
   version?: number;
   [key: string]: unknown;
+}
+
+export interface ContactRequestRecord extends PortalRecord {
+  name: string;
+  phone: string;
+  email: string;
+  company: string;
+  service: ServiceInterest;
+  message: string;
+  status: 'NEW' | 'CONTACTED' | 'ARCHIVED';
+  createdAt: string;
 }
 
 export interface Pagination {
@@ -71,6 +84,7 @@ export interface PortalOverview {
   threatSeries: ThreatPoint[];
   recentAlerts: PortalRecord[];
   recentTickets: PortalRecord[];
+  contactRequests?: ContactRequestRecord[];
   generatedAt: string;
 }
 

@@ -2,6 +2,7 @@ import { portalFail } from "./portal-errors.js";
 
 const ALL_PERMISSIONS = Object.freeze([
   "dashboard.read",
+  "contact_requests.read",
   "tenants.read",
   "tenants.write",
   "alerts.read",
@@ -112,6 +113,7 @@ const ROLE_PERMISSIONS = Object.freeze({
   ]),
   account_manager: new Set([
     "dashboard.read",
+    "contact_requests.read",
     "tenants.read",
     "tenants.write",
     "alerts.read",

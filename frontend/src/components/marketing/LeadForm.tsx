@@ -4,20 +4,16 @@ import { Check, LoaderCircle, Send } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 
-import { submitContactRequest, type ContactRequest } from '../../lib/contact';
+import {
+  submitContactRequest,
+  validateContactRequest,
+  type ContactErrors,
+  type ContactRequestDraft,
+} from '../../lib/contact';
 import type { ServiceInterest } from '../../marketing/content';
 
-type LeadFields = {
-  name: string;
-  company: string;
-  email: string;
-  phone: string;
-  service: ServiceInterest | '';
-  message: string;
-  consent: boolean;
-};
-
-type LeadErrors = Partial<Record<keyof LeadFields, string>>;
+type LeadFields = ContactRequestDraft;
+type LeadErrors = ContactErrors;
 
 const initialFields: LeadFields = {
   name: '',
@@ -29,15 +25,6 @@ const initialFields: LeadFields = {
   consent: false,
 };
 
-const backendCategory: Record<ServiceInterest, string> = {
-  'website-design': 'architecture',
-  'software-development': 'architecture',
-  'digital-transformation': 'architecture',
-  'online-advertising': 'architecture',
-  'digital-marketing': 'architecture',
-  'it-solutions': 'identity-cloud',
-};
-
 const serviceLabels: Record<ServiceInterest, string> = {
   'website-design': 'Thiết kế website',
   'software-development': 'Phát triển phần mềm',
@@ -46,36 +33,6 @@ const serviceLabels: Record<ServiceInterest, string> = {
   'digital-marketing': 'Digital Marketing',
   'it-solutions': 'Giải pháp công nghệ thông tin',
 };
-
-function validateLead(fields: LeadFields): LeadErrors {
-  const errors: LeadErrors = {};
-  const digits = fields.phone.replace(/\D/g, '');
-
-  if (fields.name.trim().length < 2) errors.name = 'Hãy nhập họ và tên của người liên hệ.';
-  if (fields.company.trim().length < 2) errors.company = 'Hãy nhập tên doanh nghiệp.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u.test(fields.email.trim())) errors.email = 'Hãy nhập địa chỉ email hợp lệ.';
-  if (digits.length < 8 || digits.length > 15) errors.phone = 'Hãy nhập số điện thoại từ 8 đến 15 chữ số.';
-  if (!fields.service) errors.service = 'Hãy chọn dịch vụ cần trao đổi.';
-  if (fields.message.trim().length < 20) errors.message = 'Hãy mô tả nhu cầu bằng ít nhất 20 ký tự.';
-  if (!fields.consent) errors.consent = 'Hãy xác nhận QTS có thể liên hệ về yêu cầu này.';
-  return errors;
-}
-
-function serializeLegacyRequest(fields: LeadFields): ContactRequest {
-  const service = fields.service || 'website-design';
-  return {
-    email: fields.email,
-    service: backendCategory[service],
-    message: [
-      `Người liên hệ: ${fields.name.trim()}`,
-      `Doanh nghiệp: ${fields.company.trim()}`,
-      `Điện thoại: ${fields.phone.trim()}`,
-      `Dịch vụ: ${serviceLabels[service]}`,
-      `Nội dung: ${fields.message.trim()}`,
-    ].join('\n'),
-    consent: fields.consent,
-  };
-}
 
 export function LeadForm({ compact = false }: { compact?: boolean }) {
   const [fields, setFields] = useState(initialFields);
@@ -109,30 +66,30 @@ export function LeadForm({ compact = false }: { compact?: boolean }) {
     setFields(next);
     setStatus('idle');
     setStatusMessage('');
-    if (touched.current[field]) setErrors(validateLead(next));
+    if (touched.current[field]) setErrors(validateContactRequest(next));
   };
 
   const touchField = (field: keyof LeadFields) => {
     touched.current[field] = true;
-    setErrors(validateLead(fields));
+    setErrors(validateContactRequest(fields));
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextErrors = validateLead(fields);
+    const nextErrors = validateContactRequest(fields);
     setErrors(nextErrors);
     touched.current = Object.fromEntries(
       Object.keys(fields).map((key) => [key, true]),
     ) as Partial<Record<keyof LeadFields, boolean>>;
 
-    if (Object.keys(nextErrors).length > 0) {
+    if (Object.keys(nextErrors).length > 0 || !fields.service) {
       requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
       return;
     }
 
     setStatus('loading');
     try {
-      await submitContactRequest(serializeLegacyRequest(fields));
+      await submitContactRequest({ ...fields, service: fields.service });
       setStatus('success');
       setStatusMessage('QTS đã nhận yêu cầu và sẽ phản hồi qua email đã cung cấp.');
     } catch (error) {

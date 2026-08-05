@@ -88,9 +88,9 @@ function normalizeReturnTo(value, publicOrigin) {
 }
 
 function authorizedReturnTo(returnTo, workspace) {
-  const prefix = workspace === "client" ? "/client" : "/admin";
+  const prefix = workspace === "client" ? "/portal" : "/admin";
   if (returnTo === prefix || returnTo.startsWith(`${prefix}/`)) return returnTo;
-  return workspace === "client" ? "/client/overview" : "/admin/soc";
+  return workspace === "client" ? "/portal/overview" : "/admin/soc";
 }
 
 function randomIdentifier() {
@@ -125,6 +125,7 @@ export function createAuthService({
   now = Date.now,
   audit = () => {},
   membershipResolver,
+  sessionValidator,
   transactionStore = createMemoryExpiringStore({ now }),
   sessionStore = createMemoryExpiringStore({ now }),
 } = {}) {
@@ -163,6 +164,26 @@ export function createAuthService({
     } catch {
       // Authentication must not depend on the availability of a log transport.
     }
+  }
+
+  async function requireActiveSession(sessionId) {
+    if (!sessionId) fail(401, "SESSION_REQUIRED", "Cần đăng nhập để tiếp tục.");
+    const record = await sessionStore.get(sessionId);
+    if (!record) fail(401, "SESSION_REQUIRED", "Phiên đăng nhập không tồn tại hoặc đã hết hạn.");
+
+    if (sessionValidator && !(await sessionValidator(record))) {
+      await sessionStore.delete(sessionId);
+      await emitAudit({
+        event: "auth_session_revoked",
+        issuer: record.identity?.issuer,
+        subject: record.identity?.subject,
+        tenantId: record.authorization?.tenantId,
+        role: record.authorization?.role,
+      });
+      fail(401, "SESSION_REQUIRED", "Phiên đăng nhập không còn hiệu lực.");
+    }
+
+    return record;
   }
 
   return Object.freeze({
@@ -294,16 +315,12 @@ export function createAuthService({
     },
 
     async getSession(sessionId) {
-      if (!sessionId) fail(401, "SESSION_REQUIRED", "Cần đăng nhập để tiếp tục.");
-      const record = await sessionStore.get(sessionId);
-      if (!record) fail(401, "SESSION_REQUIRED", "Phiên đăng nhập không tồn tại hoặc đã hết hạn.");
+      const record = await requireActiveSession(sessionId);
       return publicSession(record);
     },
 
     async authenticateSession(sessionId, csrfToken) {
-      if (!sessionId) fail(401, "SESSION_REQUIRED", "Cần đăng nhập để tiếp tục.");
-      const record = await sessionStore.get(sessionId);
-      if (!record) fail(401, "SESSION_REQUIRED", "Phiên đăng nhập không tồn tại hoặc đã hết hạn.");
+      const record = await requireActiveSession(sessionId);
       if (csrfToken !== undefined && !secureEqual(record.csrfToken, csrfToken)) {
         fail(403, "INVALID_CSRF_TOKEN", "CSRF token không hợp lệ.");
       }
@@ -317,9 +334,7 @@ export function createAuthService({
     },
 
     async logout(sessionId, csrfToken) {
-      if (!sessionId) fail(401, "SESSION_REQUIRED", "Cần đăng nhập để tiếp tục.");
-      const record = await sessionStore.get(sessionId);
-      if (!record) fail(401, "SESSION_REQUIRED", "Phiên đăng nhập không tồn tại hoặc đã hết hạn.");
+      const record = await requireActiveSession(sessionId);
       if (!secureEqual(record.csrfToken, csrfToken)) {
         fail(403, "INVALID_CSRF_TOKEN", "CSRF token không hợp lệ.");
       }

@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { submitContactRequest } from '../../lib/contact';
 import { LeadForm } from './LeadForm';
 
-vi.mock('../../lib/contact', () => ({
+vi.mock('../../lib/contact', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../lib/contact')>(),
   submitContactRequest: vi.fn(),
 }));
 
@@ -21,7 +22,7 @@ beforeEach(() => {
 });
 
 describe('LeadForm', () => {
-  it('collects corporate lead fields and serializes them for the legacy endpoint', async () => {
+  it('submits the corporate contact contract directly', async () => {
     const user = userEvent.setup();
     render(<LeadForm />);
 
@@ -36,15 +37,12 @@ describe('LeadForm', () => {
 
     await waitFor(() => expect(submitMock).toHaveBeenCalledTimes(1));
     expect(submitMock).toHaveBeenCalledWith({
+      name: 'Nguyễn Minh An',
+      company: 'Công ty Minh An',
       email: 'an@minhan.vn',
-      service: 'architecture',
-      message: [
-        'Người liên hệ: Nguyễn Minh An',
-        'Doanh nghiệp: Công ty Minh An',
-        'Điện thoại: 0901234567',
-        'Dịch vụ: Phát triển phần mềm',
-        'Nội dung: Cần số hóa quy trình phê duyệt hợp đồng nội bộ.',
-      ].join('\n'),
+      phone: '0901234567',
+      service: 'software-development',
+      message: 'Cần số hóa quy trình phê duyệt hợp đồng nội bộ.',
       consent: true,
     });
     expect(screen.queryByLabelText('Quy mô doanh nghiệp')).not.toBeInTheDocument();
@@ -58,7 +56,7 @@ describe('LeadForm', () => {
     await user.click(screen.getByRole('button', { name: 'Nhận tư vấn miễn phí' }));
 
     await waitFor(() => expect(screen.getByLabelText('Họ và tên')).toHaveFocus());
-    expect(screen.getByText('Hãy chọn dịch vụ cần trao đổi.')).toBeVisible();
+    expect(screen.getByText(/Hãy chọn dịch vụ cần QTS trao đổi/)).toBeVisible();
     expect(submitMock).not.toHaveBeenCalled();
   });
 });

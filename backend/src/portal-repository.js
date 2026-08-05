@@ -4,6 +4,8 @@ import { isIP } from "node:net";
 import { withDatabaseScope } from "./database.js";
 import { portalFail } from "./portal-errors.js";
 
+const INTERNAL_SCOPE = Object.freeze({ tenantId: null, isCrossTenant: true });
+
 const RESOURCE_DEFINITIONS = Object.freeze({
   tenants: {
     table: "tenants",
@@ -404,7 +406,47 @@ export function createPortalRepository(database, { secretCipher } = {}) {
   if (!database) throw new Error("Portal repository requires a database.");
 
   return Object.freeze({
-    async getOverview({ scope }) {
+    async createContactRequest({ context, data }) {
+      return withDatabaseScope(database, INTERNAL_SCOPE, async (client) => {
+        const id = randomUUID();
+        const result = await client.query(
+           `INSERT INTO contact_requests (
+             id, name, phone, email, company, service, message, consent, request_id
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           RETURNING id, status, created_at`,
+          [
+            id,
+            data.name,
+            data.phone,
+            data.email,
+            data.company,
+            data.service,
+            data.message,
+            data.consent,
+            context.requestId,
+          ],
+        );
+        const address = context?.ipAddress;
+        await client.query(
+          `INSERT INTO audit_events (
+             tenant_id, actor_issuer, actor_subject, actor_role, action,
+             resource_type, resource_id, outcome, request_id, ip_address, metadata
+           ) VALUES (
+             NULL, NULL, NULL, NULL, 'contact_requests.create',
+             'contact_requests', $1, 'SUCCESS', $2, $3, $4::jsonb
+           )`,
+          [
+            id,
+            context?.requestId ?? null,
+            typeof address === "string" && isIP(address) ? address : null,
+            JSON.stringify({ service: data.service }),
+          ],
+        );
+        return serializeDatabaseRow(result.rows[0]);
+      });
+    },
+
+    async getOverview({ scope, includeContactRequests = false }) {
       return withDatabaseScope(database, scope, async (client) => {
         const parameters = scope.tenantId ? [scope.tenantId] : [];
         const tenantFilter = scope.tenantId ? "AND tenant_id = $1" : "";
@@ -491,11 +533,19 @@ export function createPortalRepository(database, { secretCipher } = {}) {
            LIMIT 6`,
           parameters,
         );
+        const contactRequests = includeContactRequests
+          ? await client.query(
+            `SELECT id, name, phone, email, company, service, message, status, created_at
+             FROM contact_requests
+             ORDER BY created_at DESC
+             LIMIT 8`,
+          )
+          : null;
 
         const metricRow = serializeDatabaseRow(metrics.rows[0]);
         const generatedAt = metricRow.generatedAt;
         delete metricRow.generatedAt;
-        return {
+        const overview = {
           scope: scope.tenantId
             ? { kind: "TENANT", ...serializeDatabaseRow(tenantResult.rows[0]) }
             : { kind: "ALL_TENANTS", tenantCount: tenantResult.rows[0].tenant_count },
@@ -507,6 +557,10 @@ export function createPortalRepository(database, { secretCipher } = {}) {
           recentTickets: recentTickets.rows.map(serializeDatabaseRow),
           generatedAt,
         };
+        if (contactRequests) {
+          overview.contactRequests = contactRequests.rows.map(serializeDatabaseRow);
+        }
+        return overview;
       });
     },
 
@@ -1031,14 +1085,28 @@ export function createPortalRepository(database, { secretCipher } = {}) {
       });
     },
 
-    async listInvitations({ scope, query }) {
+    async listInvitations({ actor, scope, query }) {
       return withDatabaseScope(database, scope, async (client) => {
+        const isClientWorkspace = actor.authorization.workspace === "client";
+        const expiryParameters = scope.tenantId ? [scope.tenantId] : [];
+        await client.query(
+          `UPDATE invitations
+           SET status = 'EXPIRED',
+               version = version + 1,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE status = 'PENDING'
+             AND expires_at <= CURRENT_TIMESTAMP
+             ${scope.tenantId ? "AND tenant_id = $1" : ""}
+             ${isClientWorkspace ? "AND workspace = 'client'" : ""}`,
+          expiryParameters,
+        );
         const parameters = [];
         const clauses = [];
         if (scope.tenantId) {
           parameters.push(scope.tenantId);
           clauses.push(`i.tenant_id = $${parameters.length}`);
         }
+        if (isClientWorkspace) clauses.push("i.workspace = 'client'");
         if (query.filters.status) {
           parameters.push(query.filters.status);
           clauses.push(`i.status = $${parameters.length}`);
@@ -1049,7 +1117,8 @@ export function createPortalRepository(database, { secretCipher } = {}) {
         const values = [...parameters, query.pageSize, offset];
         const result = await client.query(
           `SELECT i.id, i.tenant_id, t.name AS tenant_name, i.email, i.role,
-                  i.status, i.expires_at, i.created_at, i.accepted_at
+                  i.workspace, i.status, i.version, i.expires_at, i.created_at,
+                  i.updated_at, i.accepted_at, i.revoked_at
            FROM invitations i
            JOIN tenants t ON t.id = i.tenant_id
            ${where}
@@ -1200,6 +1269,16 @@ export function createPortalRepository(database, { secretCipher } = {}) {
           portalFail(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tài nguyên.");
         }
         const row = serializeDatabaseRow(result.rows[0]);
+        let revokedSessionCount;
+        if (resource === "tenants" && data.status && data.status !== "ACTIVE") {
+          const revoked = await client.query(
+            `DELETE FROM auth_records
+             WHERE store_name = 'session'
+               AND value->'authorization'->>'tenantId' = $1`,
+            [id],
+          );
+          revokedSessionCount = revoked.rowCount;
+        }
         await appendAudit(client, {
           actor,
           context,
@@ -1207,7 +1286,11 @@ export function createPortalRepository(database, { secretCipher } = {}) {
           resource,
           resourceId: id,
           tenantId: row.tenantId ?? row.id,
-          metadata: { fields: entries.map(([key]) => key), previousVersion: expectedVersion },
+          metadata: {
+            fields: entries.map(([key]) => key),
+            previousVersion: expectedVersion,
+            ...(revokedSessionCount === undefined ? {} : { revokedSessionCount }),
+          },
         });
         return row;
       });

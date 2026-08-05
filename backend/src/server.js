@@ -104,6 +104,7 @@ export async function createApiServer({ environment = process.env } = {}) {
     oidcClient,
     audit: createAuthAuditWriter(database),
     membershipResolver: (input) => membershipRepository.resolve(input),
+    sessionValidator: (record) => membershipRepository.validateSession(record),
     transactionStore: createPostgresExpiringStore({
       database,
       storeName: "transaction",

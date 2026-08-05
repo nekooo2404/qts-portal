@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   assertPermission,
+  hasPermission,
   resolveTenantScope,
 } from "../src/portal-policy.js";
 
@@ -30,6 +31,11 @@ const QTS_ADMIN = Object.freeze({
     role: "qts_admin",
     workspace: "internal",
   },
+});
+
+const INTERNAL_MEMBER = (role) => ({
+  ...QTS_ADMIN,
+  authorization: { ...QTS_ADMIN.authorization, role },
 });
 
 test("client chỉ nhận tenant scope từ session", () => {
@@ -74,7 +80,14 @@ test("qts_admin có đầy đủ quyền portal", () => {
     "members.write",
     "shifts.write",
     "audit.read",
+    "contact_requests.read",
   ]) {
     assert.doesNotThrow(() => assertPermission(QTS_ADMIN, permission));
   }
+});
+
+test("chỉ account manager và qts_admin đọc yêu cầu tư vấn", () => {
+  assert.equal(hasPermission(INTERNAL_MEMBER("account_manager"), "contact_requests.read"), true);
+  assert.equal(hasPermission(INTERNAL_MEMBER("soc_l3"), "contact_requests.read"), false);
+  assert.equal(hasPermission(CLIENT_ADMIN, "contact_requests.read"), false);
 });

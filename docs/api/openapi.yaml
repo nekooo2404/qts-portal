@@ -193,6 +193,146 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/v1/contact-requests:
+    post:
+      operationId: createContactRequest
+      summary: Gửi yêu cầu tư vấn từ trang công ty
+      tags: [Public intake]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactRequestInput"
+      responses:
+        "201":
+          description: Yêu cầu đã được lưu để đội ngũ QTS tiếp nhận
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactRequestResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "422":
+          description: Nội dung yêu cầu không hợp lệ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Vượt giới hạn gửi yêu cầu theo địa chỉ nguồn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/portal/invitations:
+    get:
+      operationId: listInvitations
+      summary: Liệt kê lời mời trong tenant/workspace được cấp quyền
+      tags: [Membership]
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: tenantId
+          schema:
+            type: string
+          description: Chỉ dành cho workspace nội bộ; client luôn dùng tenant trong session
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, ACCEPTED, REVOKED, EXPIRED]
+      responses:
+        "200":
+          description: Danh sách lời mời; bản ghi quá hạn được chuyển thành EXPIRED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationCollectionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createInvitation
+      summary: Tạo lời mời gắn trước tenant và role
+      tags: [Membership]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationCreateInput"
+      responses:
+        "201":
+          description: Lời mời đã được tạo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: Email, role hoặc thời hạn không hợp lệ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/portal/invitations/{id}:
+    patch:
+      operationId: revokeInvitation
+      summary: Thu hồi lời mời đang chờ
+      tags: [Membership]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationPatchInput"
+      responses:
+        "200":
+          description: Lời mời đã được thu hồi và ghi audit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Không tìm thấy lời mời trong tenant scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Version xung đột hoặc lời mời không còn ở trạng thái PENDING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   securitySchemes:
     sessionCookie:
@@ -223,7 +363,7 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     ServiceUnavailable:
-      description: Google OIDC chưa được cấu hình hoặc tạm thời không khả dụng
+      description: Dịch vụ phụ thuộc chưa được cấu hình hoặc tạm thời không khả dụng
       content:
         application/json:
           schema:
@@ -324,6 +464,177 @@ components:
             expiresAt:
               type: string
               format: date-time
+    ContactRequestInput:
+      type: object
+      additionalProperties: false
+      required: [name, phone, email, company, service, message, consent]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 160
+        phone:
+          type: string
+          minLength: 8
+          maxLength: 32
+          pattern: '^[+0-9(). -]+$'
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        company:
+          type: string
+          minLength: 2
+          maxLength: 160
+        service:
+          type: string
+          enum:
+            - website-design
+            - software-development
+            - digital-transformation
+            - online-advertising
+            - digital-marketing
+            - it-solutions
+        message:
+          type: string
+          minLength: 20
+          maxLength: 1200
+        consent:
+          type: boolean
+          const: true
+    ContactRequestResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [id, status, createdAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            status:
+              type: string
+              const: NEW
+            createdAt:
+              type: string
+              format: date-time
+    InvitationCreateInput:
+      type: object
+      additionalProperties: false
+      required: [email, role, expiresAt]
+      properties:
+        tenantId:
+          type: string
+          maxLength: 64
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        role:
+          $ref: "#/components/schemas/Role"
+        expiresAt:
+          type: string
+          format: date-time
+          description: Phải nằm trong 30 ngày tiếp theo
+    InvitationPatchInput:
+      type: object
+      additionalProperties: false
+      required: [status, expectedVersion]
+      properties:
+        status:
+          type: string
+          const: REVOKED
+        expectedVersion:
+          type: integer
+          minimum: 1
+    Invitation:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - tenantId
+        - email
+        - role
+        - workspace
+        - status
+        - version
+        - expiresAt
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+        tenantName:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: "#/components/schemas/Role"
+        workspace:
+          type: string
+          enum: [client, internal]
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REVOKED, EXPIRED]
+        version:
+          type: integer
+          minimum: 1
+        expiresAt:
+          type: string
+          format: date-time
+        acceptedAt:
+          type: [string, "null"]
+          format: date-time
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    InvitationResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Invitation"
+    InvitationCollectionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, pagination]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invitation"
+        pagination:
+          type: object
+          additionalProperties: false
+          required: [page, pageSize, totalItems, totalPages]
+          properties:
+            page:
+              type: integer
+              minimum: 1
+            pageSize:
+              type: integer
+              minimum: 1
+              maximum: 100
+            totalItems:
+              type: integer
+              minimum: 0
+            totalPages:
+              type: integer
+              minimum: 0
     Role:
       type: string
       enum:

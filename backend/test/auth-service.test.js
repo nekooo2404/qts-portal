@@ -84,7 +84,7 @@ test("login tạo giao dịch một lần và yêu cầu state, nonce, PKCE S256
     now: () => NOW,
   });
 
-  const result = await auth.beginGoogleLogin({ returnTo: "/client/overview" });
+  const result = await auth.beginGoogleLogin({ returnTo: "/portal/overview" });
 
   assert.equal(result.authorizationUrl.searchParams.get("scope"), "openid email profile");
   assert.equal(result.authorizationUrl.searchParams.get("state"), "state-001");
@@ -103,7 +103,7 @@ test("callback ánh xạ bằng iss + sub, phát session opaque và không giữ
     oidcClient,
     now: () => NOW,
   });
-  const login = await auth.beginGoogleLogin({ returnTo: "/client/overview" });
+  const login = await auth.beginGoogleLogin({ returnTo: "/portal/overview" });
 
   const result = await auth.completeGoogleLogin({
     callbackUrl: new URL(
@@ -112,7 +112,7 @@ test("callback ánh xạ bằng iss + sub, phát session opaque và không giữ
     transactionCookie: "state-001",
   });
 
-  assert.equal(result.redirectTo, "/client/overview");
+  assert.equal(result.redirectTo, "/portal/overview");
   assert.match(result.sessionCookie, /^__Host-qts_session=/);
   assert.match(result.sessionCookie, /HttpOnly/);
   assert.match(result.sessionCookie, /Secure/);
@@ -216,6 +216,48 @@ test("logout yêu cầu CSRF token và thu hồi session phía server", async ()
   assert.equal((await auth.getSession(sessionId)).authorization.role, "client_admin");
 
   await auth.logout(sessionId, session.csrfToken);
+  await assert.rejects(
+    () => auth.getSession(sessionId),
+    (error) => error.code === "SESSION_REQUIRED",
+  );
+});
+
+test("session bị thu hồi khi membership hoặc tenant không còn hiệu lực", async () => {
+  let sessionIsActive = true;
+  const auditEvents = [];
+  const auth = createAuthService({
+    config: createConfig(),
+    oidcClient: createOidcClient(),
+    now: () => NOW,
+    audit: (event) => auditEvents.push(event),
+    sessionValidator: async (record) => {
+      assert.equal(record.authorization.tenantId, "qts-vietnam");
+      return sessionIsActive;
+    },
+  });
+  await auth.beginGoogleLogin({ returnTo: "/portal/overview" });
+  const login = await auth.completeGoogleLogin({
+    callbackUrl: new URL(
+      "https://portal.qts.com.vn/api/v1/auth/callback/google?code=code-001&state=state-001",
+    ),
+    transactionCookie: "state-001",
+  });
+  const sessionId = login.sessionCookie.match(/^__Host-qts_session=([^;]+)/)?.[1];
+  assert.ok(sessionId);
+  assert.equal((await auth.getSession(sessionId)).authorization.role, "client_admin");
+
+  sessionIsActive = false;
+  await assert.rejects(
+    () => auth.authenticateSession(sessionId),
+    (error) => error.code === "SESSION_REQUIRED" && error.statusCode === 401,
+  );
+  assert.deepEqual(auditEvents.at(-1), {
+    event: "auth_session_revoked",
+    issuer: "https://accounts.google.com",
+    subject: "google-subject-001",
+    tenantId: "qts-vietnam",
+    role: "client_admin",
+  });
   await assert.rejects(
     () => auth.getSession(sessionId),
     (error) => error.code === "SESSION_REQUIRED",

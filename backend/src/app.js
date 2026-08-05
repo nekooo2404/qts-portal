@@ -19,8 +19,11 @@ const DEFAULT_HEADERS = Object.freeze({
 });
 const LOGIN_RATE_LIMIT = 30;
 const LOGIN_RATE_WINDOW_MS = 5 * 60 * 1000;
+const CONTACT_RATE_LIMIT = 5;
+const CONTACT_RATE_WINDOW_MS = 10 * 60 * 1000;
 const MAX_RATE_LIMIT_CLIENTS = 10_000;
 const DEFAULT_JSON_BODY_LIMIT = 1024 * 1024;
+const CONTACT_JSON_BODY_LIMIT = 16 * 1024;
 const DOCUMENT_JSON_BODY_LIMIT = 14 * 1024 * 1024;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{8,64}$/;
 const PORTAL_RESOURCES = new Set([
@@ -439,6 +442,19 @@ async function handlePortalRequest({
       return;
     }
 
+    if (segments.length === 2 && segments[0] === "invitations") {
+      requireMethod(request, ["PATCH"]);
+      const input = await readJsonBody(request);
+      const result = await portalService.revokeInvitation({
+        actor,
+        context,
+        id: segments[1],
+        input,
+      });
+      writeJson(response, 200, { data: result }, responseHeaders);
+      return;
+    }
+
     if (segments.length === 1 && segments[0] === "audit") {
       requireMethod(request, ["GET"]);
       const result = await portalService.listAudit({
@@ -539,6 +555,10 @@ export function createRequestHandler({
   authService = createDefaultAuthService(),
   portalService,
   loginRateLimiter = createLoginRateLimiter(),
+  contactRateLimiter = createLoginRateLimiter({
+    limit: CONTACT_RATE_LIMIT,
+    windowMs: CONTACT_RATE_WINDOW_MS,
+  }),
   trustedProxyHops = 0,
 } = {}) {
   return async function requestHandler(request, response) {
@@ -602,6 +622,52 @@ export function createRequestHandler({
           status: "ready",
         },
       });
+      return;
+    }
+
+    if (pathname === "/api/v1/contact-requests") {
+      const requestId = requestIdFor(request);
+      const responseHeaders = { "X-Request-Id": requestId };
+      try {
+        requireMethod(request, ["POST"]);
+        if (!portalService?.createContactRequest) {
+          const error = new Error("Contact service unavailable.");
+          Object.assign(error, {
+            statusCode: 503,
+            code: "CONTACT_SERVICE_UNAVAILABLE",
+            publicMessage: "Kênh tiếp nhận yêu cầu chưa sẵn sàng.",
+          });
+          throw error;
+        }
+        const clientKey = resolveClientAddress(request, trustedProxyHops);
+        if (!contactRateLimiter.allow(clientKey)) {
+          writeError(
+            response,
+            429,
+            "CONTACT_RATE_LIMITED",
+            "Có quá nhiều yêu cầu liên hệ. Vui lòng thử lại sau.",
+            {
+              ...responseHeaders,
+              "Retry-After": String(contactRateLimiter.retryAfterSeconds(clientKey)),
+            },
+          );
+          return;
+        }
+        const input = await readJsonBody(request, { limit: CONTACT_JSON_BODY_LIMIT });
+        const result = await portalService.createContactRequest({
+          context: {
+            requestId,
+            ipAddress: clientKey,
+          },
+          input,
+        });
+        writeJson(response, 201, { data: result }, responseHeaders);
+      } catch (error) {
+        handleRequestError(response, error, {
+          ...responseHeaders,
+          ...(error?.responseHeaders ?? {}),
+        });
+      }
       return;
     }
 

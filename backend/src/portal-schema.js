@@ -94,9 +94,9 @@ function dateOnly(value, name, { optional = false } = {}) {
   return value;
 }
 
-function email(value, name = "Email", { optional = false } = {}) {
+function email(value, name = "Email", { max = 320, optional = false } = {}) {
   if ((value === undefined || value === null || value === "") && optional) return undefined;
-  const normalized = text(value, name, { max: 320 }).toLowerCase();
+  const normalized = text(value, name, { max }).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
     validationFail(`${name} không hợp lệ.`);
   }
@@ -136,6 +136,35 @@ export function parseListQuery(searchParams, { filters = [], sortFields = [] } =
   }
 
   return { page, pageSize, search, sortBy, sortOrder, filters: parsedFilters };
+}
+
+export function parseContactRequest(input) {
+  const value = record(input);
+  assertKnownKeys(value, ["name", "phone", "email", "company", "service", "message", "consent"]);
+  if (value.consent !== true) {
+    validationFail("Cần xác nhận QTS có thể liên hệ về yêu cầu này.");
+  }
+  const normalizedPhone = text(value.phone, "Số điện thoại", { min: 8, max: 32 });
+  const phoneDigits = normalizedPhone.replace(/\D/g, "");
+  if (!/^[+0-9().\s-]+$/.test(normalizedPhone) || phoneDigits.length < 8 || phoneDigits.length > 15) {
+    validationFail("Số điện thoại phải có từ 8 đến 15 chữ số hợp lệ.");
+  }
+  return {
+    name: text(value.name, "Họ và tên", { min: 2, max: 160 }),
+    phone: normalizedPhone,
+    email: email(value.email, "Email doanh nghiệp", { max: 254 }),
+    company: text(value.company, "Tên doanh nghiệp", { min: 2, max: 160 }),
+    service: oneOf(value.service, "Dịch vụ quan tâm", [
+      "website-design",
+      "software-development",
+      "digital-transformation",
+      "online-advertising",
+      "digital-marketing",
+      "it-solutions",
+    ]),
+    message: text(value.message, "Phạm vi cần trao đổi", { min: 20, max: 1200 }),
+    consent: true,
+  };
 }
 
 export function parseCreateTicket(input) {
@@ -489,6 +518,15 @@ export function parseInvitation(input) {
     ]),
     expiresAt: isoDateTime(value.expiresAt, "Thời hạn lời mời"),
   });
+}
+
+export function parseInvitationPatch(input) {
+  const value = record(input);
+  assertKnownKeys(value, ["status", "expectedVersion"]);
+  return {
+    status: oneOf(value.status, "Trạng thái", ["REVOKED"]),
+    expectedVersion: positiveInteger(value.expectedVersion, "expectedVersion"),
+  };
 }
 
 export function parseMemberPatch(input) {

@@ -2,6 +2,7 @@ import { ROLE_WORKSPACES } from "./auth-config.js";
 import {
   assertPermission,
   canManageClientRole,
+  hasPermission,
   resolveTenantScope,
 } from "./portal-policy.js";
 import { portalFail } from "./portal-errors.js";
@@ -9,6 +10,7 @@ import {
   parseAlertPatch,
   parseAssetPatch,
   parseContractPatch,
+  parseContactRequest,
   parseCreateAsset,
   parseCreateAlert,
   parseCreateContract,
@@ -22,6 +24,7 @@ import {
   parseCreateTicket,
   parseIntegrationPatch,
   parseInvitation,
+  parseInvitationPatch,
   parseInvoicePatch,
   parseKnowledgePatch,
   parseLicensePatch,
@@ -162,10 +165,19 @@ export function createPortalService({ repository, membershipRepository, now = Da
   if (!repository) throw new Error("Portal service requires a repository.");
 
   return Object.freeze({
+    async createContactRequest({ input, context } = {}) {
+      const data = parseContactRequest(input);
+      return repository.createContactRequest({ context, data });
+    },
+
     async getOverview({ actor, requestedTenantId } = {}) {
       assertPermission(actor, "dashboard.read");
       const scope = resolveTenantScope(actor, requestedTenantId);
-      return repository.getOverview({ actor, scope });
+      return repository.getOverview({
+        actor,
+        includeContactRequests: hasPermission(actor, "contact_requests.read"),
+        scope,
+      });
     },
 
     async listResources({ actor, resource, searchParams = new URLSearchParams() } = {}) {
@@ -421,6 +433,22 @@ export function createPortalService({ repository, membershipRepository, now = Da
         scope,
         tenantId: scope.tenantId,
         workspace: workspaceForRole(data.role),
+      });
+    },
+
+    async revokeInvitation({ actor, context, id, input } = {}) {
+      assertPermission(actor, "members.write");
+      assertResourceId(id);
+      if (!membershipRepository) {
+        portalFail(503, "MEMBERSHIP_STORE_UNAVAILABLE", "Kho thành viên chưa sẵn sàng.");
+      }
+      const data = parseInvitationPatch(input);
+      return membershipRepository.revokeInvitation({
+        actor,
+        context,
+        expectedVersion: data.expectedVersion,
+        id,
+        scope: resolveTenantScope(actor),
       });
     },
 

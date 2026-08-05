@@ -6,13 +6,16 @@ export type MarketingLink = {
   description?: string;
 };
 
-export type ServiceInterest =
-  | 'website-design'
-  | 'software-development'
-  | 'digital-transformation'
-  | 'online-advertising'
-  | 'digital-marketing'
-  | 'it-solutions';
+export const serviceInterests = [
+  'website-design',
+  'software-development',
+  'digital-transformation',
+  'online-advertising',
+  'digital-marketing',
+  'it-solutions',
+] as const;
+
+export type ServiceInterest = (typeof serviceInterests)[number];
 
 export interface Service {
   slug: string;

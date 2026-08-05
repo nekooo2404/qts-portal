@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  parseContactRequest,
   parseCreateAsset,
   parseCreateAlert,
   parseCreateContract,
@@ -14,10 +15,68 @@ import {
   parseCreateTenant,
   parseCreateTicket,
   parseInvitation,
+  parseInvitationPatch,
   parseListQuery,
   parseTicketComment,
   parseTicketPatch,
 } from "../src/portal-schema.js";
+
+test("yêu cầu liên hệ công khai được chuẩn hóa và bắt buộc consent", () => {
+  assert.deepEqual(parseContactRequest({
+    name: "  Nguyễn Minh An  ",
+    company: "  Công ty Minh An  ",
+    email: "  SECURITY@EXAMPLE.VN ",
+    phone: "  +84 901 234 567  ",
+    service: "it-solutions",
+    message: "  Cần đánh giá bề mặt tấn công trước đợt phát hành mới.  ",
+    consent: true,
+  }), {
+    name: "Nguyễn Minh An",
+    company: "Công ty Minh An",
+    email: "security@example.vn",
+    phone: "+84 901 234 567",
+    service: "it-solutions",
+    message: "Cần đánh giá bề mặt tấn công trước đợt phát hành mới.",
+    consent: true,
+  });
+
+  assert.throws(
+    () => parseContactRequest({
+      name: "Nguyễn Minh An",
+      company: "Công ty Minh An",
+      email: "security@example.vn",
+      phone: "0901234567",
+      service: "it-solutions",
+      message: "Cần đánh giá bề mặt tấn công trước đợt phát hành mới.",
+      consent: false,
+    }),
+    (error) => error.code === "VALIDATION_ERROR",
+  );
+  assert.throws(
+    () => parseContactRequest({
+      name: "Nguyễn Minh An",
+      company: "Công ty Minh An",
+      email: "security@example.vn",
+      phone: "0901234567",
+      service: "unsupported",
+      message: "Cần đánh giá bề mặt tấn công trước đợt phát hành mới.",
+      consent: true,
+    }),
+    (error) => error.code === "VALIDATION_ERROR",
+  );
+  assert.throws(
+    () => parseContactRequest({
+      name: "A",
+      company: "Công ty Minh An",
+      email: "security@example.vn",
+      phone: "123",
+      service: "it-solutions",
+      message: "Cần đánh giá bề mặt tấn công trước đợt phát hành mới.",
+      consent: true,
+    }),
+    (error) => error.code === "VALIDATION_ERROR",
+  );
+});
 
 test("phân trang có giới hạn cứng và sort allowlist", () => {
   const query = parseListQuery(
@@ -223,6 +282,14 @@ test("knowledge, invitation, shift và comment được validate ở biên", () 
     role: "qts_admin",
     expiresAt: "2026-08-10T08:00:00.000Z",
   }).role, "qts_admin");
+  assert.deepEqual(parseInvitationPatch({ status: "REVOKED", expectedVersion: 2 }), {
+    status: "REVOKED",
+    expectedVersion: 2,
+  });
+  assert.throws(
+    () => parseInvitationPatch({ status: "ACCEPTED", expectedVersion: 2 }),
+    (error) => error.code === "VALIDATION_ERROR",
+  );
 
   assert.throws(
     () => parseCreateShift({
