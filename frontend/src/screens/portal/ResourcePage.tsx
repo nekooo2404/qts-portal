@@ -246,7 +246,7 @@ export default function ResourcePage(props: ResourcePageProps) {
           />
         )}
 
-        <div className="portal-filter-bar">
+        <div className="portal-filter-bar" role="search" aria-label={`Lọc ${definition.title.toLowerCase()}`}>
           <label className="portal-search-field">
             <Search aria-hidden="true" />
             <span className="sr-only">Tìm kiếm</span>

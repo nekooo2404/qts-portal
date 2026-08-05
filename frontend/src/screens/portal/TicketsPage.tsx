@@ -236,7 +236,7 @@ export default function TicketsPage(props: TicketsPageProps) {
     <main className="portal-main" id="portal-main">
       <div className="portal-page">
         <header className="portal-page-header">
-          <div><p className="portal-eyebrow">Incident management · SLA</p><h1>Ticket & xử lý sự cố</h1><p>Kênh trao đổi tập trung giữa khách hàng và SOC, có theo dõi deadline và nhật ký đầy đủ.</p></div>
+          <div><p className="portal-eyebrow">Vận hành · Ticket · SLA</p><h1>Ticket</h1><p>Kênh trao đổi tập trung với QTS, có mức ưu tiên, người phụ trách, thời hạn và lịch sử xử lý.</p></div>
           <div className="portal-page-header__actions">
             <button className="portal-icon-button" onClick={collection.reload} title="Tải lại ticket" type="button"><RefreshCw aria-hidden="true" /><span className="sr-only">Tải lại</span></button>
             {canCreate && <button className="portal-button portal-button--primary" onClick={() => setFormOpen(true)} type="button"><Plus aria-hidden="true" /> Tạo ticket</button>}
@@ -246,7 +246,7 @@ export default function TicketsPage(props: TicketsPageProps) {
         {formOpen && <TicketCreateForm onClose={() => setFormOpen(false)} onCreated={(value) => { setMessage(value); collection.reload(); }} props={props} />}
         <p className="portal-action-status" aria-live="polite">{message}</p>
 
-        <div className="portal-filter-bar">
+        <div className="portal-filter-bar" role="search" aria-label="Lọc ticket">
           <label className="portal-search-field"><Search aria-hidden="true" /><span className="sr-only">Tìm ticket</span><input onChange={(event) => setQuery(event.target.value)} placeholder="Tìm tiêu đề, mô tả hoặc người phụ trách" type="search" value={query} /></label>
           <output>{collection.data.pagination.totalItems} ticket</output>
         </div>

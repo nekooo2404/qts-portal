@@ -169,14 +169,14 @@ export default function DocumentsPage(props: DocumentsPageProps) {
   return (
     <main className="portal-main" id="portal-main"><div className="portal-page">
       <header className="portal-page-header">
-        <div><p className="portal-eyebrow">Trust center · Audit download</p><h1>Báo cáo & tài liệu</h1><p>Tài liệu được lưu trong PostgreSQL, kiểm tra định dạng và checksum trước khi phát hành.</p></div>
+        <div><p className="portal-eyebrow">Hồ sơ dịch vụ · Tài liệu</p><h1>Tài liệu dịch vụ</h1><p>Báo cáo, biên bản và tài liệu bàn giao được kiểm tra định dạng, checksum và quyền tải xuống.</p></div>
         <div className="portal-page-header__actions">
           <button className="portal-icon-button" onClick={collection.reload} title="Tải lại tài liệu" type="button"><RefreshCw aria-hidden="true" /><span className="sr-only">Tải lại</span></button>
           {canWrite && <button className="portal-button portal-button--primary" onClick={() => setFormOpen(true)} type="button"><Plus aria-hidden="true" /> Tải lên</button>}
         </div>
       </header>
       {formOpen && <UploadForm onClose={() => setFormOpen(false)} onCreated={(value) => { setMessage(value); collection.reload(); }} props={props} />}
-      <div className="portal-filter-bar">
+      <div className="portal-filter-bar" role="search" aria-label="Lọc tài liệu">
         <label className="portal-search-field"><Search aria-hidden="true" /><span className="sr-only">Tìm tài liệu</span><input onChange={(event) => setQuery(event.target.value)} placeholder="Tìm tiêu đề hoặc tên tệp" type="search" value={query} /></label>
         <output>{collection.data.pagination.totalItems} tài liệu</output>
       </div>

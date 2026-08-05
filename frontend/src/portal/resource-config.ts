@@ -48,9 +48,9 @@ const severity = [
 export const RESOURCE_DEFINITIONS: Record<PortalResource, ResourceDefinition> = {
   alerts: {
     resource: 'alerts',
-    eyebrow: 'SOC · Threat intelligence',
-    title: 'Cảnh báo an ninh',
-    description: 'Các tín hiệu đã được ghi nhận từ SIEM, EDR, WAF và nguồn giám sát được QTS phê duyệt.',
+    eyebrow: 'Vận hành · An toàn thông tin',
+    title: 'Cảnh báo dịch vụ',
+    description: 'Theo dõi tín hiệu từ các nguồn giám sát được QTS phê duyệt và trạng thái xử lý hiện tại.',
     emptyTitle: 'Chưa ghi nhận cảnh báo',
     emptyDescription: 'Danh sách sẽ xuất hiện khi nguồn tích hợp gửi cảnh báo vận hành thật.',
     createLabel: 'Ghi nhận cảnh báo',
@@ -78,16 +78,16 @@ export const RESOURCE_DEFINITIONS: Record<PortalResource, ResourceDefinition> = 
     defaultValues: { severity: 'MEDIUM' },
   },
   tickets: {
-    resource: 'tickets', eyebrow: 'Incident management', title: 'Ticket hỗ trợ',
-    description: 'Theo dõi yêu cầu, phản hồi và cam kết SLA trên một luồng có kiểm toán.',
+    resource: 'tickets', eyebrow: 'Vận hành · SLA', title: 'Ticket',
+    description: 'Theo dõi yêu cầu, phản hồi, người phụ trách và cam kết SLA trên một luồng có lịch sử.',
     emptyTitle: 'Chưa có ticket', emptyDescription: 'Tạo ticket đầu tiên khi cần QTS hỗ trợ hoặc xử lý sự cố.',
     createLabel: 'Tạo ticket', columns: [], fields: [],
   },
   assets: {
     resource: 'assets',
-    eyebrow: 'Asset inventory',
-    title: 'Tài sản được bảo vệ',
-    description: 'Danh mục thiết bị, hệ thống, ứng dụng và trạng thái sức khỏe hiện tại.',
+    eyebrow: 'Vận hành · Tài sản',
+    title: 'Tài sản số',
+    description: 'Danh mục thiết bị, hệ thống, ứng dụng, chủ sở hữu và trạng thái sức khỏe hiện tại.',
     emptyTitle: 'Chưa có tài sản',
     emptyDescription: 'Tài sản chỉ xuất hiện sau khi được đội vận hành QTS nhập hoặc đồng bộ.',
     createLabel: 'Thêm tài sản',
@@ -120,8 +120,8 @@ export const RESOURCE_DEFINITIONS: Record<PortalResource, ResourceDefinition> = 
     defaultValues: { status: 'ACTIVE', criticality: 'MEDIUM', healthStatus: 'UNKNOWN' },
   },
   licenses: {
-    resource: 'licenses', eyebrow: 'Entitlement', title: 'Giấy phép dịch vụ',
-    description: 'Theo dõi số lượng đã cấp, mức sử dụng và thời hạn của từng giấy phép.',
+    resource: 'licenses', eyebrow: 'Hồ sơ dịch vụ · License', title: 'License dịch vụ',
+    description: 'Theo dõi số lượng đã cấp, mức sử dụng, nhà cung cấp và thời hạn của từng license.',
     emptyTitle: 'Chưa có giấy phép', emptyDescription: 'Chưa có giấy phép nào được gắn với phạm vi hiện tại.',
     createLabel: 'Thêm giấy phép',
     columns: [
@@ -144,8 +144,8 @@ export const RESOURCE_DEFINITIONS: Record<PortalResource, ResourceDefinition> = 
     defaultValues: { usedQuantity: '0', status: 'ACTIVE' },
   },
   tenants: {
-    resource: 'tenants', eyebrow: 'Account management', title: 'Khách hàng & tenant',
-    description: 'Hồ sơ vận hành, gói dịch vụ, liên hệ khẩn cấp và chính sách SLA của từng khách hàng.',
+    resource: 'tenants', eyebrow: 'Khách hàng · Tenant', title: 'Hồ sơ khách hàng',
+    description: 'Quản lý phạm vi vận hành, gói dịch vụ, liên hệ khẩn cấp và chính sách SLA của từng tenant.',
     emptyTitle: 'Chưa có tenant', emptyDescription: 'Tạo tenant trước khi cấp tài sản, cảnh báo hoặc tài khoản khách hàng.',
     createLabel: 'Tạo tenant',
     columns: [
@@ -169,8 +169,8 @@ export const RESOURCE_DEFINITIONS: Record<PortalResource, ResourceDefinition> = 
     defaultValues: { status: 'ACTIVE' },
   },
   contracts: {
-    resource: 'contracts', eyebrow: 'Commercial operations', title: 'Hợp đồng dịch vụ',
-    description: 'Theo dõi hiệu lực và giá trị hợp đồng gắn với tenant được chọn.',
+    resource: 'contracts', eyebrow: 'Hồ sơ dịch vụ · Hợp đồng', title: 'Hợp đồng dịch vụ',
+    description: 'Theo dõi phạm vi, hiệu lực, giá trị và ngày gia hạn của hợp đồng trong tổ chức hiện tại.',
     emptyTitle: 'Chưa có hợp đồng', emptyDescription: 'Chưa có hợp đồng nào trong phạm vi hiện tại.',
     createLabel: 'Thêm hợp đồng',
     columns: [
@@ -191,8 +191,8 @@ export const RESOURCE_DEFINITIONS: Record<PortalResource, ResourceDefinition> = 
     defaultValues: { status: 'ACTIVE', currency: 'VND' },
   },
   invoices: {
-    resource: 'invoices', eyebrow: 'Billing', title: 'Hóa đơn',
-    description: 'Trạng thái phát hành, đến hạn và thanh toán của từng hóa đơn.',
+    resource: 'invoices', eyebrow: 'Hồ sơ dịch vụ · Tài chính', title: 'Hóa đơn',
+    description: 'Theo dõi số tiền, trạng thái phát hành, ngày đến hạn và thanh toán của từng hóa đơn.',
     emptyTitle: 'Chưa có hóa đơn', emptyDescription: 'Chưa có hóa đơn nào trong phạm vi hiện tại.',
     createLabel: 'Tạo hóa đơn',
     columns: [
@@ -213,14 +213,14 @@ export const RESOURCE_DEFINITIONS: Record<PortalResource, ResourceDefinition> = 
     defaultValues: { status: 'DRAFT', currency: 'VND' },
   },
   documents: {
-    resource: 'documents', eyebrow: 'Trust center', title: 'Báo cáo & tài liệu',
-    description: 'Kho tải xuống báo cáo an ninh, tuân thủ và tài liệu thương mại có kiểm toán.',
+    resource: 'documents', eyebrow: 'Hồ sơ dịch vụ · Tài liệu', title: 'Tài liệu dịch vụ',
+    description: 'Tập trung báo cáo, biên bản, tài liệu bàn giao và tệp thương mại được cấp theo quyền.',
     emptyTitle: 'Chưa có tài liệu', emptyDescription: 'Chưa có tài liệu nào được phát hành cho phạm vi hiện tại.',
     createLabel: 'Tải tài liệu lên', columns: [], fields: [],
   },
   knowledge: {
-    resource: 'knowledge', eyebrow: 'Knowledge base', title: 'Trung tâm tri thức',
-    description: 'Quy trình xử lý, hướng dẫn vận hành và cập nhật tuân thủ đã được phê duyệt.',
+    resource: 'knowledge', eyebrow: 'Hồ sơ dịch vụ · Tri thức', title: 'Tri thức vận hành',
+    description: 'Tra cứu quy trình xử lý, hướng dẫn sử dụng và cập nhật vận hành đã được phê duyệt.',
     emptyTitle: 'Chưa có bài viết', emptyDescription: 'Chưa có nội dung tri thức phù hợp với quyền hiện tại.',
     createLabel: 'Soạn bài viết',
     columns: [
@@ -242,7 +242,7 @@ export const RESOURCE_DEFINITIONS: Record<PortalResource, ResourceDefinition> = 
     defaultValues: { audience: 'CLIENT', status: 'DRAFT' },
   },
   integrations: {
-    resource: 'integrations', eyebrow: 'API management', title: 'Tích hợp bảo mật',
+    resource: 'integrations', eyebrow: 'Nền tảng · Tích hợp', title: 'Tích hợp hệ thống',
     description: 'Kết nối SIEM, SOAR, EDR và webhook; secret được mã hóa phía backend và không bao giờ trả về UI.',
     emptyTitle: 'Chưa có tích hợp', emptyDescription: 'Chưa cấu hình endpoint tích hợp cho phạm vi hiện tại.',
     createLabel: 'Thêm tích hợp',
@@ -266,7 +266,7 @@ export const RESOURCE_DEFINITIONS: Record<PortalResource, ResourceDefinition> = 
     ],
   },
   shifts: {
-    resource: 'shifts', eyebrow: 'SOC workforce', title: 'Ca trực SOC',
+    resource: 'shifts', eyebrow: 'Vận hành nội bộ · SOC', title: 'Ca trực SOC',
     description: 'Lịch trực, cấp xử lý và ghi chú bàn giao phục vụ vận hành 24/7.',
     emptyTitle: 'Chưa có ca trực', emptyDescription: 'Chưa lập lịch ca trực cho phạm vi đang chọn.',
     createLabel: 'Lập ca trực',

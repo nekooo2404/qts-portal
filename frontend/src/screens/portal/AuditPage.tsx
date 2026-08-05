@@ -42,10 +42,10 @@ export default function AuditPage({ selectedTenantId }: { selectedTenantId?: str
   return (
     <main className="portal-main" id="portal-main"><div className="portal-page">
       <header className="portal-page-header">
-        <div><p className="portal-eyebrow">Forensic · Append only</p><h1>Nhật ký kiểm toán</h1><p>Theo dõi đăng nhập, thay đổi cấu hình, tải tài liệu và thao tác nghiệp vụ theo tenant.</p></div>
+        <div><p className="portal-eyebrow">Tổ chức · Append only</p><h1>Nhật ký hoạt động</h1><p>Theo dõi đăng nhập, thay đổi cấu hình, tải tài liệu và thao tác nghiệp vụ theo phạm vi tổ chức.</p></div>
         <button className="portal-icon-button" onClick={reload} title="Tải lại audit log" type="button"><RefreshCw aria-hidden="true" /><span className="sr-only">Tải lại</span></button>
       </header>
-      <div className="portal-filter-bar">
+      <div className="portal-filter-bar" role="search" aria-label="Lọc nhật ký hoạt động">
         <label className="portal-search-field"><Search aria-hidden="true" /><span className="sr-only">Tìm audit log</span><input onChange={(event) => setQuery(event.target.value)} placeholder="Tìm action hoặc resource ID" type="search" value={query} /></label>
         <output>{collection?.pagination.totalItems ?? 0} sự kiện</output>
       </div>

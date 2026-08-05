@@ -1,10 +1,10 @@
-import { KeyRound, MailPlus, RefreshCw, Save, ShieldCheck, UserCog, Users, X } from 'lucide-react';
+import { Ban, KeyRound, MailPlus, RefreshCw, Save, Search, ShieldCheck, UserCog, Users, X } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 
 import type { PortalSession } from '../../auth/types';
 import { PortalEmptyState, PortalErrorState, PortalLoading } from '../../components/portal/PortalFeedback';
 import { PortalStatus } from '../../components/portal/PortalStatus';
-import { createInvitation, listSpecialResource, updateMember } from '../../portal/api';
+import { createInvitation, listSpecialResource, revokeInvitation, updateMember } from '../../portal/api';
 import type { CollectionResponse, LoadState, PortalRecord, TenantOption } from '../../portal/types';
 
 interface TeamPageProps {
@@ -75,6 +75,44 @@ function MemberRow({ canWrite, member, onUpdated, session }: {
   );
 }
 
+function InvitationRow({ canWrite, invitation, onUpdated, session }: {
+  canWrite: boolean;
+  invitation: PortalRecord;
+  onUpdated: (message: string) => void;
+  session: PortalSession;
+}) {
+  const [revoking, setRevoking] = useState(false);
+  const canRevoke = canWrite && invitation.status === 'PENDING';
+
+  async function revoke() {
+    if (typeof invitation.version !== 'number') {
+      onUpdated('Không thể thu hồi lời mời không có version.');
+      return;
+    }
+    if (!window.confirm(`Thu hồi lời mời cho ${String(invitation.email)}?`)) return;
+    setRevoking(true);
+    try {
+      await revokeInvitation(invitation.id, invitation.version, session.csrfToken);
+      onUpdated(`Đã thu hồi lời mời cho ${String(invitation.email)}.`);
+    } catch (error) {
+      onUpdated(error instanceof Error ? error.message : 'Không thể thu hồi lời mời.');
+    } finally {
+      setRevoking(false);
+    }
+  }
+
+  return (
+    <tr>
+      <th data-label="Email" scope="row"><strong>{String(invitation.email)}</strong><small>{invitation.id}</small></th>
+      <td data-label="Tenant">{invitation.tenantName ? String(invitation.tenantName) : String(invitation.tenantId)}</td>
+      <td data-label="Role">{String(invitation.role)}</td>
+      <td data-label="Trạng thái"><PortalStatus value={invitation.status} /></td>
+      <td data-label="Hết hạn">{formatTime(invitation.expiresAt)}</td>
+      {canWrite && <td data-label="Thao tác">{canRevoke && <button aria-label={`Thu hồi lời mời của ${String(invitation.email)}`} className="portal-icon-button" disabled={revoking} onClick={() => void revoke()} title="Thu hồi lời mời" type="button"><Ban aria-hidden="true" /></button>}</td>}
+    </tr>
+  );
+}
+
 function InvitationForm({ onClose, onCreated, props }: {
   onClose: () => void;
   onCreated: (message: string) => void;
@@ -139,6 +177,7 @@ export default function TeamPage(props: TeamPageProps) {
   const [invitations, setInvitations] = useState<LoadState<CollectionResponse>>({ status: 'loading' });
   const [formOpen, setFormOpen] = useState(false);
   const [message, setMessage] = useState('');
+  const [query, setQuery] = useState('');
   const reload = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
@@ -167,11 +206,17 @@ export default function TeamPage(props: TeamPageProps) {
   const error = members.status === 'error' ? members.error : invitations.status === 'error' ? invitations.error : null;
   const memberData = members.status === 'ready' ? members.data.data : [];
   const invitationData = invitations.status === 'ready' ? invitations.data.data : [];
+  const normalizedQuery = query.trim().toLocaleLowerCase('vi');
+  const matchesQuery = (record: PortalRecord) => !normalizedQuery || Object.values(record).some(
+    (value) => typeof value === 'string' && value.toLocaleLowerCase('vi').includes(normalizedQuery),
+  );
+  const visibleMembers = memberData.filter(matchesQuery);
+  const visibleInvitations = invitationData.filter(matchesQuery);
 
   return (
     <main className="portal-main" id="portal-main"><div className="portal-page">
       <header className="portal-page-header">
-        <div><p className="portal-eyebrow">IAM · RBAC · Session revocation</p><h1>Thành viên & phân quyền</h1><p>Cấp trước tenant và role; lần đăng nhập Google đầu tiên sẽ gắn email đã xác minh với cặp định danh iss + sub.</p></div>
+        <div><p className="portal-eyebrow">Tổ chức · Thành viên</p><h1>Thành viên và phân quyền</h1><p>Quản lý người dùng, vai trò và lời mời trong phạm vi tổ chức hiện tại.</p></div>
         <div className="portal-page-header__actions"><button className="portal-icon-button" onClick={reload} title="Tải lại thành viên" type="button"><RefreshCw aria-hidden="true" /><span className="sr-only">Tải lại</span></button>{canWrite && <button className="portal-button portal-button--primary" onClick={() => setFormOpen(true)} type="button"><MailPlus aria-hidden="true" /> Mời tài khoản</button>}</div>
       </header>
       <div className="portal-access-note" role="note"><KeyRound aria-hidden="true" /><span>Email chỉ dùng để khớp lời mời ban đầu. Sau khi chấp nhận, hệ thống nhận diện người dùng bằng iss + sub; thay role hoặc vô hiệu hóa sẽ thu hồi session hiện có.</span></div>
@@ -179,16 +224,24 @@ export default function TeamPage(props: TeamPageProps) {
       <p className="portal-action-status" aria-live="polite">{message}</p>
       {loading ? <PortalLoading /> : error ? <PortalErrorState error={error} onRetry={reload} /> : (
         <>
+          <div className="portal-filter-bar" role="search" aria-label="Lọc thành viên và lời mời">
+            <label className="portal-search-field">
+              <Search aria-hidden="true" />
+              <span className="sr-only">Tìm thành viên hoặc lời mời</span>
+              <input onChange={(event) => setQuery(event.target.value)} placeholder="Tìm theo tên, email, vai trò..." type="search" value={query} />
+            </label>
+            <output>{visibleMembers.length + visibleInvitations.length} kết quả</output>
+          </div>
           <section className="portal-section" aria-labelledby="members-title">
             <header className="portal-section__header"><div><p className="portal-eyebrow">Danh tính đã gắn</p><h2 id="members-title">Thành viên</h2></div><Users aria-hidden="true" /></header>
-            {memberData.length === 0 ? <PortalEmptyState title="Chưa có thành viên" description="Chưa có danh tính nào trong tenant scope hiện tại." /> : (
-              <div className="portal-table-wrap"><table className="portal-table"><thead><tr><th>Thành viên</th><th>Tenant</th><th>Role</th><th>Trạng thái</th><th>Đăng nhập cuối</th>{canWrite && <th>Thao tác</th>}</tr></thead><tbody>{memberData.map((member) => <MemberRow canWrite={canWrite} key={member.id} member={member} onUpdated={(value) => { setMessage(value); reload(); }} session={session} />)}</tbody></table></div>
+            {visibleMembers.length === 0 ? <PortalEmptyState title={query ? 'Không tìm thấy thành viên' : 'Chưa có thành viên'} description={query ? 'Thử từ khóa khác hoặc xóa bộ lọc hiện tại.' : 'Chưa có danh tính nào trong phạm vi tổ chức hiện tại.'} /> : (
+              <div className="portal-table-wrap"><table className="portal-table"><thead><tr><th>Thành viên</th><th>Tenant</th><th>Role</th><th>Trạng thái</th><th>Đăng nhập cuối</th>{canWrite && <th>Thao tác</th>}</tr></thead><tbody>{visibleMembers.map((member) => <MemberRow canWrite={canWrite} key={member.id} member={member} onUpdated={(value) => { setMessage(value); reload(); }} session={session} />)}</tbody></table></div>
             )}
           </section>
           <section className="portal-section" aria-labelledby="invitations-title">
             <header className="portal-section__header"><div><p className="portal-eyebrow">Chờ đăng nhập Google</p><h2 id="invitations-title">Lời mời</h2></div><UserCog aria-hidden="true" /></header>
-            {invitationData.length === 0 ? <PortalEmptyState title="Không có lời mời" description="Không có lời mời đang chờ hoặc đã xử lý trong phạm vi hiện tại." /> : (
-              <div className="portal-table-wrap"><table className="portal-table"><thead><tr><th>Email</th><th>Tenant</th><th>Role</th><th>Trạng thái</th><th>Hết hạn</th></tr></thead><tbody>{invitationData.map((invite) => <tr key={invite.id}><th data-label="Email" scope="row"><strong>{String(invite.email)}</strong><small>{invite.id}</small></th><td data-label="Tenant">{invite.tenantName ? String(invite.tenantName) : String(invite.tenantId)}</td><td data-label="Role">{String(invite.role)}</td><td data-label="Trạng thái"><PortalStatus value={invite.status} /></td><td data-label="Hết hạn">{formatTime(invite.expiresAt)}</td></tr>)}</tbody></table></div>
+            {visibleInvitations.length === 0 ? <PortalEmptyState title={query ? 'Không tìm thấy lời mời' : 'Không có lời mời'} description={query ? 'Thử từ khóa khác hoặc xóa bộ lọc hiện tại.' : 'Không có lời mời đang chờ hoặc đã xử lý trong phạm vi hiện tại.'} /> : (
+              <div className="portal-table-wrap"><table className="portal-table"><thead><tr><th>Email</th><th>Tenant</th><th>Role</th><th>Trạng thái</th><th>Hết hạn</th>{canWrite && <th>Thao tác</th>}</tr></thead><tbody>{visibleInvitations.map((invitation) => <InvitationRow canWrite={canWrite} invitation={invitation} key={invitation.id} onUpdated={(value) => { setMessage(value); reload(); }} session={session} />)}</tbody></table></div>
             )}
           </section>
         </>
