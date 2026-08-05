@@ -1,7 +1,6 @@
 'use client';
 
 import { Check, LoaderCircle, Send } from 'lucide-react';
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 
@@ -133,7 +132,7 @@ export function LeadForm({ compact = false }: { compact?: boolean }) {
       <div className="qts-lead-form__footer">
         <label className="qts-consent">
           <input type="checkbox" checked={fields.consent} disabled={status === 'loading'} aria-invalid={Boolean(fieldError('consent'))} aria-describedby="lead-consent-help" onBlur={() => touchField('consent')} onChange={(event) => updateField('consent', event.target.checked)} />
-          <span>Tôi đồng ý để QTS liên hệ về yêu cầu này và đã đọc <Link href="/phap-ly/bao-mat">chính sách bảo mật</Link>.</span>
+          <span>Tôi đồng ý để QTS sử dụng thông tin đã cung cấp nhằm liên hệ và xử lý yêu cầu này.</span>
         </label>
         <p id="lead-consent-help" className="qts-field__help" data-error={Boolean(fieldError('consent'))}>{fieldError('consent') ?? 'Thông tin chỉ được dùng để xử lý yêu cầu tư vấn.'}</p>
 

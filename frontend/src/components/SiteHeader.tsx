@@ -18,6 +18,7 @@ type OpenMenu = 'services' | 'solutions' | null;
 
 const pathMatches = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 const restoreFocus = (target: HTMLElement | null) => requestAnimationFrame(() => target?.focus());
+const directNavigation = primaryNavigation.filter(({ href }) => href !== '/' && href !== '/dich-vu' && href !== '/giai-phap');
 
 export function SiteHeader() {
   const pathname = usePathname() ?? '/';
@@ -123,7 +124,7 @@ export function SiteHeader() {
               )}
             </div>
 
-            {primaryNavigation.slice(2).map((item) => (
+            {directNavigation.map((item) => (
               <Link
                 className="qts-nav__link"
                 data-active={pathMatches(pathname, item.href)}
@@ -182,8 +183,7 @@ export function SiteHeader() {
               <summary data-active={solutionActive}>Giải pháp</summary>
               <div>{solutionMenu.map((item) => <Link href={item.href} key={item.href} aria-current={pathMatches(pathname, item.href) ? 'page' : undefined} onClick={closeNavigation}>{item.label}</Link>)}</div>
             </details>
-            {primaryNavigation.slice(2).map((item) => <Link href={item.href} key={item.href} aria-current={pathMatches(pathname, item.href) ? 'page' : undefined} onClick={closeNavigation}>{item.label}</Link>)}
-            <Link href="/ve-qts" onClick={closeNavigation}>Về QTS</Link>
+            {directNavigation.map((item) => <Link href={item.href} key={item.href} aria-current={pathMatches(pathname, item.href) ? 'page' : undefined} onClick={closeNavigation}>{item.label}</Link>)}
             <Link href="/ho-tro" onClick={closeNavigation}>Hỗ trợ</Link>
             <div className="qts-mobile-nav__actions">
               <Link className="qts-button qts-button--secondary" href="/login">Đăng nhập</Link>

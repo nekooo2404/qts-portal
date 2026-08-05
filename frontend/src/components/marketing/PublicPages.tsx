@@ -1,14 +1,10 @@
-import { ArrowRight, Check, CircleCheck, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Check, CircleCheck, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import {
-  articles,
-  caseStudies,
   services,
   solutions,
-  type PlaceholderArticle,
-  type PlaceholderProject,
   type Service,
   type Solution,
 } from '../../marketing/content';
@@ -51,15 +47,11 @@ function PublicCta({ title = 'Bắt đầu từ phạm vi doanh nghiệp đang c
   );
 }
 
-function PlaceholderNote() {
-  return <aside className="qts-placeholder-note" role="note">Nội dung dưới đây là placeholder có chủ đích và sẽ được thay bằng dữ liệu xác minh sau.</aside>;
-}
-
 export function ServicesPage() {
   return (
     <MarketingShell>
       <main id="main-content" className="marketing-page">
-        <PublicHero eyebrow="Danh mục dịch vụ" title="Dịch vụ công nghệ theo bài toán thật" description="QTS Việt Nam tư vấn, thiết kế và triển khai dịch vụ theo mục tiêu, phạm vi và cách vận hành của từng doanh nghiệp." aside={<ProductPreview variant="assets" compact />}>
+        <PublicHero eyebrow="Danh mục dịch vụ" title="Dịch vụ công nghệ theo bài toán thật" description="QTS Việt Nam tư vấn, thiết kế và triển khai dịch vụ theo mục tiêu, phạm vi và cách vận hành của từng doanh nghiệp." aside={<DetailFacts items={[["Bắt đầu", "Từ mục tiêu và hiện trạng"], ["Triển khai", "Theo phạm vi được xác nhận"], ["Bàn giao", "Có tiêu chí nghiệm thu"]]} />}>
           <Link className="qts-button qts-button--primary" href="/lien-he">Trao đổi nhu cầu <ArrowRight aria-hidden="true" /></Link>
         </PublicHero>
         <section className="qts-section qts-directory">
@@ -108,7 +100,7 @@ export function SolutionsPage() {
   return (
     <MarketingShell>
       <main id="main-content" className="marketing-page">
-        <PublicHero eyebrow="Giải pháp theo ngành" title="Giải pháp theo bối cảnh kinh doanh" description="QTS Việt Nam kết nối dịch vụ, dữ liệu và quy trình theo nhu cầu vận hành của từng ngành." aside={<ProductPreview variant="analytics" compact />}>
+        <PublicHero eyebrow="Giải pháp theo ngành" title="Giải pháp theo bối cảnh kinh doanh" description="QTS Việt Nam kết nối dịch vụ, dữ liệu và quy trình theo nhu cầu vận hành của từng ngành." aside={<DetailFacts items={[["Bối cảnh", "Theo mô hình vận hành"], ["Kiến trúc", "Theo hệ thống hiện tại"], ["Ưu tiên", "Theo quyết định cần cải thiện"]]} />}>
           <Link className="qts-button qts-button--primary" href="/lien-he">Khảo sát giải pháp <ArrowRight aria-hidden="true" /></Link>
         </PublicHero>
         <section className="qts-section qts-solution-directory"><div className="qts-shell"><SectionHeading title="Bắt đầu từ bài toán của ngành" description="Không áp một quy trình giống nhau cho mọi doanh nghiệp." /><div className="qts-solution-directory__grid">{solutions.map((solution, index) => <article key={solution.slug}><header><span>0{index + 1}</span></header><small>{solution.audience}</small><h2>{solution.title}</h2><p>{solution.challenge}</p><ul>{solution.modules.map((module) => <li key={module}>{module}</li>)}</ul><Link className="qts-text-link" href={`/giai-phap/${solution.slug}`}>Xem giải pháp <ArrowRight aria-hidden="true" /></Link></article>)}</div></div></section>
@@ -133,32 +125,16 @@ export function SolutionPage({ solution }: { solution: Solution }) {
   );
 }
 
-function OverviewPage<T extends PlaceholderProject | PlaceholderArticle>({ eyebrow, title, intro, items, finalCtaLabel, finalCtaHref, renderItem }: {
-  eyebrow: string;
-  title: string;
-  intro: string;
-  items: T[];
-  finalCtaLabel: string;
-  finalCtaHref: string;
-  renderItem: (item: T, index: number) => ReactNode;
-}) {
-  return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow={eyebrow} title={title} description={intro}><Link className="qts-button qts-button--primary" href={finalCtaHref}>{finalCtaLabel} <ArrowRight aria-hidden="true" /></Link></PublicHero><section className="qts-section qts-case-library"><div className="qts-shell"><PlaceholderNote /><div className="qts-resource-grid__items">{items.map((item, index) => renderItem(item, index))}</div></div></section><PublicCta /></main></MarketingShell>;
-}
-
 export function ProjectsPage() {
-  return <OverviewPage eyebrow="Dự án" title="Các hồ sơ triển khai đang chờ dữ liệu xác minh" intro="QTS Việt Nam giữ cấu trúc hồ sơ dự án sẵn sàng để thay bằng dữ liệu thật ngay khi được xác nhận." items={caseStudies} finalCtaLabel="Nhận tư vấn giải pháp" finalCtaHref="/lien-he" renderItem={(item, index) => <article key={item.slug}><span>0{index + 1}</span><small>{item.industry}</small><h2>{item.title}</h2><p>{item.challenge}</p><dl><div><dt>Khách hàng</dt><dd>{item.client}</dd></div><div><dt>Kết quả</dt><dd>{item.result}</dd></div></dl><Link className="qts-text-link" href={`/du-an/${item.slug}`}>Xem hồ sơ <ArrowRight aria-hidden="true" /></Link></article>} />;
+  return <UnpublishedCollectionPage eyebrow="Dự án" title="Hồ sơ dự án chỉ được công bố sau khi xác minh" description="QTS Việt Nam chỉ đăng thông tin khách hàng, phạm vi và kết quả khi đã có dữ liệu cùng quyền công bố phù hợp." />;
 }
 
 export function NewsPage() {
-  return <OverviewPage eyebrow="Tin tức" title="Nội dung biên tập đang chờ lịch xuất bản chính thức" intro="Các khối dưới đây là bố cục placeholder để hoàn thiện trải nghiệm đọc trước khi có nội dung đã xác minh." items={articles} finalCtaLabel="Trao đổi với QTS Việt Nam" finalCtaHref="/lien-he" renderItem={(item, index) => <article key={item.slug}><span>0{index + 1}</span><small>{item.category} · {item.publishedLabel}</small><h2>{item.title}</h2><p>{item.excerpt}</p><Link className="qts-text-link" href={`/tin-tuc/${item.slug}`}>Đọc bài viết <ArrowRight aria-hidden="true" /></Link></article>} />;
+  return <UnpublishedCollectionPage eyebrow="Tin tức" title="Nội dung chỉ xuất bản sau khi hoàn tất biên tập" description="Các bài viết sẽ xuất hiện tại đây khi nguồn, ngày cập nhật và người chịu trách nhiệm nội dung đã được xác nhận." />;
 }
 
-export function NewsArticlePage({ article }: { article: PlaceholderArticle }) {
-  return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow={`Tin tức · ${article.category}`} title={article.title} description={article.excerpt}><Link className="qts-button qts-button--primary" href="/lien-he">Trao đổi với QTS Việt Nam <ArrowRight aria-hidden="true" /></Link></PublicHero><section className="qts-section qts-case-detail"><div className="qts-shell"><PlaceholderNote /><article><p>{article.summary}</p><p>{article.publishedLabel} · {article.readTime}</p></article></div></section><PublicCta /></main></MarketingShell>;
-}
-
-export function CaseStudyPage({ item }: { item: PlaceholderProject }) {
-  return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow="Dự án · Placeholder" title={item.title} description={item.challenge}><PlaceholderNote /></PublicHero><section className="qts-section qts-case-detail"><div className="qts-shell qts-case-detail__grid"><article><span>01</span><h2>Khách hàng</h2><p>{item.client}</p></article><article><span>02</span><h2>Cách tiếp cận</h2><p>{item.solution}</p></article><article><span>03</span><h2>Kết quả</h2><p>{item.result}</p></article></div></section><PublicCta /></main></MarketingShell>;
+function UnpublishedCollectionPage({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
+  return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow={eyebrow} title={title} description={description}><Link className="qts-button qts-button--primary" href="/dich-vu">Xem dịch vụ đang cung cấp <ArrowRight aria-hidden="true" /></Link></PublicHero><PublicCta /></main></MarketingShell>;
 }
 
 export function AboutPage() {
@@ -166,7 +142,7 @@ export function AboutPage() {
 }
 
 export function ContactPage() {
-  return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow="Liên hệ" title="Bắt đầu bằng bối cảnh thật của doanh nghiệp" description="Mô tả mục tiêu, hệ thống hiện tại và thời điểm cần triển khai. Yêu cầu hợp lệ được chuyển vào kênh tiếp nhận của QTS Việt Nam." aside={<div className="qts-contact-facts"><div><Mail aria-hidden="true" /><span>Email</span><strong>[EMAIL]</strong></div><div><Phone aria-hidden="true" /><span>Điện thoại</span><strong>[SỐ ĐIỆN THOẠI]</strong></div><div><MapPin aria-hidden="true" /><span>Văn phòng</span><strong>[ĐỊA CHỈ]</strong></div></div>} /><section className="qts-lead qts-lead--page"><div className="qts-shell qts-lead__layout"><header><p className="qts-kicker">Yêu cầu tư vấn</p><h2>Thông tin đủ rõ giúp kết nối đúng chuyên môn.</h2><p>Sau khi gửi thành công, yêu cầu có mã tiếp nhận để đội QTS xử lý.</p><ul><li><Check aria-hidden="true" /> Không tự động đăng ký quảng cáo</li><li><Check aria-hidden="true" /> Có kiểm tra dữ liệu đầu vào</li></ul></header><LeadForm /></div></section></main></MarketingShell>;
+  return <MarketingShell><main id="main-content" className="marketing-page"><PublicHero eyebrow="Liên hệ" title="Bắt đầu bằng bối cảnh thật của doanh nghiệp" description="Mô tả mục tiêu, hệ thống hiện tại và thời điểm cần triển khai. Yêu cầu hợp lệ được chuyển vào kênh tiếp nhận của QTS Việt Nam." aside={<DetailFacts items={[["Tiếp nhận", "Qua biểu mẫu có kiểm tra dữ liệu"], ["Phạm vi", "Được xác nhận trước khi báo giá"], ["Bàn giao", "Theo tiêu chí nghiệm thu thống nhất"]]} />} /><section className="qts-lead qts-lead--page"><div className="qts-shell qts-lead__layout"><header><p className="qts-kicker">Yêu cầu tư vấn</p><h2>Thông tin đủ rõ giúp kết nối đúng chuyên môn.</h2><p>Sau khi gửi thành công, yêu cầu có mã tiếp nhận để đội QTS xử lý.</p><ul><li><Check aria-hidden="true" /> Không tự động đăng ký quảng cáo</li><li><Check aria-hidden="true" /> Có kiểm tra dữ liệu đầu vào</li></ul></header><LeadForm /></div></section></main></MarketingShell>;
 }
 
 export function LegalPage({ type }: { type: 'privacy' | 'terms' }) {

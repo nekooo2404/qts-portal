@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { articles, caseStudies, primaryNavigation, services, solutions } from './content';
+import { articles, caseStudies, primaryNavigation, searchItems, services, solutions } from './content';
 
 describe('marketing content model', () => {
   it('matches the approved IA and placeholder policy', () => {
@@ -9,8 +9,6 @@ describe('marketing content model', () => {
       '/gioi-thieu',
       '/dich-vu',
       '/giai-phap',
-      '/du-an',
-      '/tin-tuc',
       '/lien-he',
     ]);
     expect(services.map((item) => item.slug)).toEqual([
@@ -24,5 +22,6 @@ describe('marketing content model', () => {
     expect(solutions).toHaveLength(6);
     expect(caseStudies.every((item) => item.client === '[TÊN KHÁCH HÀNG]')).toBe(true);
     expect(articles.every((item) => item.isPlaceholder === true)).toBe(true);
+    expect(searchItems.every((item) => !item.title.includes('['))).toBe(true);
   });
 });

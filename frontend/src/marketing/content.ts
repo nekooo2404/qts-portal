@@ -78,8 +78,6 @@ export const primaryNavigation = [
   { href: '/gioi-thieu', label: 'Giới thiệu', description: 'Năng lực, cách làm việc và định hướng của QTS Việt Nam' },
   { href: '/dich-vu', label: 'Dịch vụ', description: 'Các nhóm dịch vụ công nghệ QTS Việt Nam triển khai' },
   { href: '/giai-phap', label: 'Giải pháp', description: 'Giải pháp theo nhu cầu kinh doanh' },
-  { href: '/du-an', label: 'Dự án', description: 'Hồ sơ dự án và case study đang chờ dữ liệu xác minh' },
-  { href: '/tin-tuc', label: 'Tin tức', description: 'Bài viết và cập nhật đang chờ dữ liệu xác minh' },
   { href: '/lien-he', label: 'Liên hệ', description: 'Biểu mẫu tư vấn và thông tin liên hệ' },
 ] as const satisfies MarketingLink[];
 
@@ -262,8 +260,6 @@ export const frequentlyAskedQuestions = [
 export const searchItems = [
   ...services.map((service) => ({ id: `service-${service.slug}`, href: `/dich-vu/${service.slug}`, title: service.title, description: service.summary, category: 'Dịch vụ', keywords: [...service.scope, ...service.technologies] })),
   ...solutions.map((solution) => ({ id: `solution-${solution.slug}`, href: `/giai-phap/${solution.slug}`, title: solution.title, description: solution.summary, category: 'Giải pháp', keywords: [...solution.modules, solution.audience] })),
-  ...caseStudies.map((item) => ({ id: `case-${item.slug}`, href: `/du-an/${item.slug}`, title: item.title, description: item.challenge, category: 'Dự án', keywords: [item.industry] })),
-  ...articles.map((article) => ({ id: `article-${article.slug}`, href: `/tin-tuc/${article.slug}`, title: article.title, description: article.excerpt, category: 'Tin tức', keywords: [article.category] })),
   { id: 'contact', href: '/lien-he', title: `Liên hệ ${SITE_NAME}`, description: 'Biểu mẫu tư vấn và thông tin liên hệ.', category: 'Liên hệ', keywords: ['tư vấn', 'liên hệ'] },
 ];
 

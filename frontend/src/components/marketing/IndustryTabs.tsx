@@ -67,7 +67,7 @@ export function IndustryTabs() {
           <h3>{active.challenge}</h3>
           <p>{active.summary}</p>
           <Link className="qts-text-link" href={`/giai-phap/${active.slug}`}>
-            Xem giải pháp {active.title.toLocaleLowerCase('vi')} <ArrowRight aria-hidden="true" />
+            Xem giải pháp <ArrowRight aria-hidden="true" />
           </Link>
         </div>
         <dl>

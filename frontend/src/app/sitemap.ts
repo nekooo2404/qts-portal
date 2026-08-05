@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-import { articles, caseStudies, services, solutions } from '../marketing/content';
+import { services, solutions } from '../marketing/content';
 import { siteUrl } from '../marketing/site';
 
 const lastModified = new Date('2026-08-04');
@@ -13,8 +13,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ['/gioi-thieu/', 0.9],
     ['/dich-vu/', 0.9],
     ['/giai-phap/', 0.9],
-    ['/du-an/', 0.8],
-    ['/tin-tuc/', 0.8],
     ['/lien-he/', 0.8],
   ] as const;
 
@@ -36,18 +34,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified,
       changeFrequency: 'monthly' as const,
       priority: 0.75,
-    })),
-    ...caseStudies.map(({ slug }) => ({
-      url: siteUrl(`/du-an/${slug}/`),
-      lastModified,
-      changeFrequency: 'monthly' as const,
-      priority: 0.65,
-    })),
-    ...articles.map(({ slug }) => ({
-      url: siteUrl(`/tin-tuc/${slug}/`),
-      lastModified,
-      changeFrequency: 'monthly' as const,
-      priority: 0.65,
     })),
   ];
 }

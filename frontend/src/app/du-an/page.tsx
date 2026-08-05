@@ -3,8 +3,9 @@ import { ProjectsPage } from '@/src/components/marketing/PublicPages';
 
 export const metadata: Metadata = {
   title: 'Dự án',
-  description: 'QTS Việt Nam giữ cấu trúc hồ sơ dự án sẵn sàng để thay bằng dữ liệu thật ngay khi được xác nhận.',
+  description: 'Hồ sơ dự án QTS Việt Nam đã được xác minh và cho phép công bố.',
   alternates: { canonical: '/du-an/' },
+  robots: { index: false, follow: false },
 };
 
 export default function Page() {

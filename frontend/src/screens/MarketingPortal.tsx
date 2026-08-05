@@ -17,7 +17,6 @@ import {
   Radar,
   ServerCog,
   ShieldCheck,
-  Sparkles,
   TimerReset,
   UsersRound,
 } from 'lucide-react';
@@ -35,8 +34,6 @@ import { ProductPreview } from '../components/marketing/ProductPreview';
 import { SectionHeading } from '../components/marketing/SectionHeading';
 import { SectionReveal } from '../components/marketing/SectionReveal';
 import {
-  articles,
-  caseStudies,
   frequentlyAskedQuestions,
   platformFeatures,
   processSteps,
@@ -82,13 +79,10 @@ const ecosystemNodes = [
   { icon: Radar, label: 'Bảo mật & giám sát' },
 ];
 
-const featureVariants = ['projects', 'tickets', 'assets', 'analytics'] as const;
-
 const credibilitySignals = [
   ['Từ 2011', 'Mốc hoạt động do QTS cung cấp'],
-  ['[SỐ DỰ ÁN]', 'Chờ hồ sơ dự án được xác minh'],
-  ['[KHÁCH HÀNG]', 'Chờ quyền công bố thương hiệu'],
-  ['[CHỨNG NHẬN]', 'Chờ tài liệu năng lực được duyệt'],
+  ['Theo phạm vi', 'Báo giá và kế hoạch triển khai'],
+  ['Có nghiệm thu', 'Tiêu chí bàn giao được thống nhất'],
 ] as const;
 
 export default function MarketingPortal() {
@@ -125,13 +119,9 @@ export default function MarketingPortal() {
           </div>
         </section>
 
-        <SectionReveal className="qts-proof" aria-label="Thông tin năng lực đã xác minh và vị trí chờ dữ liệu">
+        <SectionReveal className="qts-proof" aria-label="Nguyên tắc triển khai của QTS">
           <div className="qts-shell qts-proof__grid">
             {credibilitySignals.map(([value, label]) => <div key={value}><strong>{value}</strong><span>{label}</span></div>)}
-          </div>
-          <div className="qts-shell qts-proof__logos" aria-label="Vị trí dành cho thương hiệu khách hàng đã được cho phép">
-            <span>Thương hiệu khách hàng sẽ được cập nhật sau xác thực</span>
-            {['Logo 01', 'Logo 02', 'Logo 03', 'Logo 04', 'Logo 05'].map((item) => <i key={item}>{item}</i>)}
           </div>
         </SectionReveal>
 
@@ -154,7 +144,7 @@ export default function MarketingPortal() {
         </SectionReveal>
 
         <SectionReveal className="qts-section qts-outcomes" aria-labelledby="outcomes-title">
-          <div className="qts-shell">
+          <div className="qts-shell qts-shell--wide">
             <SectionHeading
               title="Từ dịch vụ rời rạc đến năng lực vận hành có hệ thống"
               description="Ba kết quả thiết kế làm tiêu chuẩn cho mọi module của QTS One."
@@ -176,7 +166,7 @@ export default function MarketingPortal() {
         </SectionReveal>
 
         <SectionReveal className="qts-section qts-ecosystem" id="nen-tang" aria-labelledby="ecosystem-title">
-          <div className="qts-shell">
+          <div className="qts-shell qts-ecosystem__layout">
             <SectionHeading
               align="center"
               title="Một hệ sinh thái, nhiều luồng công việc"
@@ -208,7 +198,7 @@ export default function MarketingPortal() {
         </SectionReveal>
 
         <SectionReveal className="qts-section qts-features" aria-labelledby="features-title">
-          <div className="qts-shell">
+          <div className="qts-shell qts-shell--wide">
             <SectionHeading
               title="Không chỉ xem báo cáo. Hành động ngay trong cùng workspace."
               description="Mỗi module được thiết kế quanh quyết định người dùng phải thực hiện, không phải quanh danh sách tính năng."
@@ -216,7 +206,7 @@ export default function MarketingPortal() {
             />
             <div className="qts-feature-list">
               {platformFeatures.map((feature, index) => (
-                <article className="qts-feature" data-reverse={index % 2 === 1} key={feature.id}>
+                <article className="qts-feature" key={feature.id}>
                   <div className="qts-feature__copy">
                     <span className="qts-feature__index">0{index + 1}</span>
                     <h3>{feature.title}</h3>
@@ -224,7 +214,6 @@ export default function MarketingPortal() {
                     <ul>{feature.points.map((point) => <li key={point}><CircleCheck aria-hidden="true" /> {point}</li>)}</ul>
                     <Link className="qts-text-link" href={feature.href}>Xem phạm vi triển khai <ArrowRight aria-hidden="true" /></Link>
                   </div>
-                  <ProductPreview variant={featureVariants[index]} compact />
                 </article>
               ))}
             </div>
@@ -242,7 +231,7 @@ export default function MarketingPortal() {
         </SectionReveal>
 
         <SectionReveal className="qts-section qts-process" aria-labelledby="process-title">
-          <div className="qts-shell">
+          <div className="qts-shell qts-process__layout">
             <SectionHeading
               title="Từ khảo sát đến vận hành, mỗi bước đều có đầu ra"
               description="Tiến độ minh bạch bắt đầu bằng việc định nghĩa rõ quyết định và bằng chứng cần có ở từng giai đoạn."
@@ -255,30 +244,6 @@ export default function MarketingPortal() {
                 </li>
               ))}
             </ol>
-          </div>
-        </SectionReveal>
-
-        <SectionReveal className="qts-section qts-cases" aria-labelledby="cases-title">
-          <div className="qts-shell">
-            <SectionHeading
-              title="Các mô hình triển khai điển hình"
-              description="Ba tình huống dưới đây là dữ liệu demo để minh họa cách QTS One tổ chức bài toán, không phải tuyên bố kết quả khách hàng thật."
-              action={<Link className="qts-text-link" href="/khach-hang">Xem thư viện case study <ArrowRight aria-hidden="true" /></Link>}
-            />
-            <div className="qts-case-grid">
-              {caseStudies.map((item, index) => (
-                <article key={item.slug}>
-                  <header><span>{item.industry}</span><small>Dữ liệu minh họa · 0{index + 1}</small></header>
-                  <h3>{item.title}</h3>
-                  <dl>
-                    <div><dt>Thách thức</dt><dd>{item.challenge}</dd></div>
-                    <div><dt>Cách tiếp cận</dt><dd>{item.solution}</dd></div>
-                    <div><dt>Kết quả kỳ vọng</dt><dd>{item.result}</dd></div>
-                  </dl>
-                  <Link className="qts-text-link" href={`/khach-hang/${item.slug}`}>Xem cấu trúc giải pháp <ArrowRight aria-hidden="true" /></Link>
-                </article>
-              ))}
-            </div>
           </div>
         </SectionReveal>
 
@@ -299,7 +264,7 @@ export default function MarketingPortal() {
               <p className="qts-kicker">Security by design</p>
               <h2 id="trust-title">Quyền truy cập và bằng chứng vận hành được thiết kế từ đầu.</h2>
               <p>QTS One hướng đến kiến trúc multi-tenant, phân quyền theo tài nguyên và audit trail cho các hành động quan trọng.</p>
-              <Link className="qts-button qts-button--on-dark" href="/dich-vu/bao-mat">Xem năng lực bảo mật <ArrowRight aria-hidden="true" /></Link>
+              <Link className="qts-button qts-button--on-dark" href="/dich-vu/giai-phap-cong-nghe-thong-tin">Xem năng lực công nghệ <ArrowRight aria-hidden="true" /></Link>
             </div>
             <ul className="qts-trust__controls">
               <li><ShieldCheck aria-hidden="true" /><div><strong>Tách dữ liệu theo tổ chức</strong><span>Tenant context đi cùng các bản ghi nghiệp vụ quan trọng.</span></div></li>
@@ -307,31 +272,6 @@ export default function MarketingPortal() {
               <li><TimerReset aria-hidden="true" /><div><strong>Phiên và xác thực tăng cường</strong><span>MFA, giới hạn phiên và step-up cho thao tác nhạy cảm theo lộ trình IAM.</span></div></li>
               <li><Gauge aria-hidden="true" /><div><strong>Quan sát và audit</strong><span>Correlation ID, lịch sử thay đổi và cảnh báo là một phần của luồng vận hành.</span></div></li>
             </ul>
-          </div>
-          <div className="qts-shell qts-testimonial-demo">
-            <div><Sparkles aria-hidden="true" /><span>Khu vực đánh giá khách hàng</span></div>
-            <blockquote>“Nội dung đánh giá sẽ chỉ được công bố sau khi QTS có xác nhận sử dụng từ khách hàng.”</blockquote>
-            <p>Dữ liệu mẫu · không phải trích dẫn khách hàng thật</p>
-          </div>
-        </SectionReveal>
-
-        <SectionReveal className="qts-section qts-knowledge" aria-labelledby="knowledge-title">
-          <div className="qts-shell">
-            <SectionHeading
-              title="Kiến thức để đội ngũ tự vận hành tốt hơn"
-              description="Tài liệu thực dụng về quản trị dịch vụ, tài sản số, SLA và chuyển đổi quy trình."
-              action={<Link className="qts-text-link" href="/tai-nguyen">Đến trung tâm kiến thức <ArrowRight aria-hidden="true" /></Link>}
-            />
-            <div className="qts-article-list">
-              {articles.map((article, index) => (
-                <article id={article.slug} key={article.slug}>
-                  <span>0{index + 1}</span>
-                  <div><small>{article.category} · {article.updatedAt}</small><h3>{article.title}</h3><p>{article.summary}</p></div>
-                  <strong>{article.readTime}</strong>
-                  <ArrowRight aria-hidden="true" />
-                </article>
-              ))}
-            </div>
           </div>
         </SectionReveal>
 

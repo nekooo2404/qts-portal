@@ -8,25 +8,15 @@ const footerGroups = [
       { href: '/dich-vu', label: 'Dịch vụ' },
       { href: '/giai-phap', label: 'Giải pháp' },
       { href: '/bang-gia', label: 'Bảng giá' },
-      { href: '/khach-hang', label: 'Khách hàng' },
+      { href: '/login', label: 'Đăng nhập QTS One' },
     ],
   },
   {
     title: 'QTS Việt Nam',
     links: [
       { href: '/ve-qts', label: 'Về QTS' },
-      { href: '/tai-nguyen', label: 'Trung tâm kiến thức' },
       { href: '/ho-tro', label: 'Hỗ trợ' },
       { href: '/lien-he', label: 'Liên hệ' },
-    ],
-  },
-  {
-    title: 'Pháp lý',
-    links: [
-      { href: '/phap-ly/bao-mat', label: 'Chính sách bảo mật' },
-      { href: '/phap-ly/dieu-khoan', label: 'Điều khoản sử dụng' },
-      { href: '/phap-ly/bao-mat#cookie', label: 'Thiết lập cookie' },
-      { href: '/login', label: 'Đăng nhập QTS Việt Nam' },
     ],
   },
 ];
@@ -46,9 +36,8 @@ export function SiteFooter() {
           </Link>
           <p>Website, phần mềm, hạ tầng, marketing và hỗ trợ kỹ thuật được quản lý trên một hệ thống.</p>
           <dl>
-            <div><dt>Pháp nhân</dt><dd>© 2026 Công ty CP Công nghệ QTS Việt Nam</dd></div>
-            <div><dt>Liên hệ</dt><dd>[EMAIL] · [SỐ ĐIỆN THOẠI]</dd></div>
-            <div><dt>Địa chỉ</dt><dd>[ĐỊA CHỈ]</dd></div>
+            <div><dt>Hoạt động</dt><dd>Tư vấn, triển khai và vận hành giải pháp công nghệ</dd></div>
+            <div><dt>Quy trình</dt><dd>Khảo sát · Phạm vi · Nghiệm thu · Hỗ trợ</dd></div>
           </dl>
         </div>
 

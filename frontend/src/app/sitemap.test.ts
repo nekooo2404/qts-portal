@@ -8,8 +8,8 @@ describe('public sitemap', () => {
     const urls = entries.map((entry) => entry.url);
 
     expect(urls).toContain('https://qts-viet-nam.example/gioi-thieu/');
-    expect(urls).toContain('https://qts-viet-nam.example/du-an/');
-    expect(urls).toContain('https://qts-viet-nam.example/tin-tuc/');
+    expect(urls).not.toContain('https://qts-viet-nam.example/du-an/');
+    expect(urls).not.toContain('https://qts-viet-nam.example/tin-tuc/');
     expect(urls).not.toContain('https://qts-viet-nam.example/ve-qts/');
     expect(urls).not.toContain('https://qts-viet-nam.example/bang-gia/');
     expect(urls).not.toContain('https://qts-viet-nam.example/khach-hang/');
