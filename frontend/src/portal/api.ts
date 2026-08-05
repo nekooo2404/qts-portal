@@ -1,5 +1,6 @@
 import type {
   CollectionResponse,
+  ContactRequestRecord,
   PortalOverview,
   PortalRecord,
   PortalResource,
@@ -130,7 +131,11 @@ export async function getOverview(
   if (!isRecord(payload) || !isRecord(payload.data) || !isRecord(payload.data.metrics)) {
     throw new PortalApiError(502, 'INVALID_API_RESPONSE', 'Dashboard trả về dữ liệu không hợp lệ.');
   }
-  return payload.data as unknown as PortalOverview;
+  const overview = payload.data as unknown as PortalOverview;
+  if (Array.isArray(payload.data.contactRequests)) {
+    overview.contactRequests = payload.data.contactRequests as ContactRequestRecord[];
+  }
+  return overview;
 }
 
 export async function listResource(
@@ -225,6 +230,18 @@ export async function createInvitation(
     body,
     csrfToken,
     method: 'POST',
+  }));
+}
+
+export async function revokeInvitation(
+  id: string,
+  expectedVersion: number,
+  csrfToken: string,
+): Promise<PortalRecord> {
+  return unwrapRecord(await requestJson<unknown>(`/api/v1/portal/invitations/${id}`, {
+    body: { status: 'REVOKED', expectedVersion },
+    csrfToken,
+    method: 'PATCH',
   }));
 }
 

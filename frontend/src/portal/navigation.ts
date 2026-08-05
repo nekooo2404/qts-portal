@@ -29,10 +29,10 @@ const CLIENT_NAVIGATION: PortalNavigationItem[] = [
 ];
 
 const INTERNAL_NAVIGATION: PortalNavigationItem[] = [
-  { icon: Gauge, label: 'SOC tổng quan', path: '/admin/soc', section: 'Giám sát' },
-  { icon: ShieldAlert, label: 'Cảnh báo', path: '/admin/alerts', section: 'Giám sát' },
-  { icon: Tickets, label: 'Điều phối ticket', path: '/admin/tickets', section: 'Giám sát' },
-  { icon: ClipboardList, label: 'Ca trực SOC', path: '/admin/shifts', section: 'Giám sát' },
+  { icon: Gauge, label: 'Trung tâm điều hành', path: '/admin/soc', section: 'Điều hành' },
+  { icon: ShieldAlert, label: 'Cảnh báo', path: '/admin/alerts', section: 'Điều hành' },
+  { icon: Tickets, label: 'Điều phối ticket', path: '/admin/tickets', section: 'Điều hành' },
+  { icon: ClipboardList, label: 'Ca trực SOC', path: '/admin/shifts', section: 'Điều hành' },
   { icon: Building2, label: 'Khách hàng', path: '/admin/customers', section: 'Khách hàng' },
   { icon: Server, label: 'Tài sản', path: '/admin/assets', section: 'Khách hàng' },
   { icon: KeyRound, label: 'Giấy phép', path: '/admin/licenses', section: 'Khách hàng' },

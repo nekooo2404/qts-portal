@@ -1,10 +1,24 @@
-import { AlertTriangle, CheckCircle2, Clock3, RefreshCw, Server, ShieldAlert, TicketCheck } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  Inbox,
+  KeyRound,
+  Mail,
+  RefreshCw,
+  Server,
+  ShieldAlert,
+  TicketCheck,
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { PortalEmptyState, PortalErrorState, PortalLoading } from '../../components/portal/PortalFeedback';
 import { PortalStatus } from '../../components/portal/PortalStatus';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
 import { getOverview } from '../../portal/api';
-import type { LoadState, PortalOverview, PortalRecord, ThreatPoint } from '../../portal/types';
+import type { ServiceInterest } from '../../marketing/content';
+import type { ContactRequestRecord, LoadState, PortalOverview, PortalRecord, ThreatPoint } from '../../portal/types';
 
 function formatTime(value: unknown): string {
   if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) return 'Chưa có thời gian';
@@ -143,7 +157,68 @@ function RecentTickets({ records }: { records: PortalRecord[] }) {
   );
 }
 
-export default function OverviewPage({ selectedTenantId }: { selectedTenantId?: string }) {
+const CONTACT_SERVICE_LABELS: Record<ServiceInterest, string> = {
+  'website-design': 'Thiết kế website',
+  'software-development': 'Phát triển phần mềm',
+  'digital-transformation': 'Tư vấn chuyển đổi số',
+  'online-advertising': 'Quảng cáo trực tuyến',
+  'digital-marketing': 'Digital Marketing',
+  'it-solutions': 'Giải pháp công nghệ thông tin',
+};
+
+function ContactRequests({ records }: { records: ContactRequestRecord[] }) {
+  return (
+    <section className="portal-section" aria-labelledby="contact-requests-title">
+      <header className="portal-section__header">
+        <div>
+          <p className="portal-eyebrow">Tiếp nhận công khai · không thuộc tenant</p>
+          <h2 id="contact-requests-title">Yêu cầu tư vấn mới</h2>
+        </div>
+        <Inbox aria-hidden="true" />
+      </header>
+      {records.length === 0 ? (
+        <PortalEmptyState
+          title="Chưa có yêu cầu tư vấn"
+          description="Các yêu cầu gửi từ trang công ty sẽ xuất hiện tại đây."
+        />
+      ) : (
+        <div className="portal-record-list portal-record-list--compact portal-contact-list">
+          {records.map((record) => {
+            const service = CONTACT_SERVICE_LABELS[record.service];
+            return (
+              <article key={record.id}>
+                <span className="portal-record-list__icon" data-tone="info">
+                  <Mail aria-hidden="true" />
+                </span>
+                <div className="portal-record-list__body">
+                  <div className="portal-record-list__heading">
+                    <span>{record.company} · {service}</span>
+                    <time>{formatTime(record.createdAt)}</time>
+                  </div>
+                  <h2>{record.name}</h2>
+                  <p>{record.message}</p>
+                  <dl>
+                    <div><dt>Trạng thái</dt><dd><PortalStatus value={record.status} /></dd></div>
+                    <div><dt>Điện thoại</dt><dd><a href={`tel:${record.phone}`}>{record.phone}</a></dd></div>
+                    <div><dt>Email</dt><dd><a href={`mailto:${record.email}`}>{record.email}</a></dd></div>
+                  </dl>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export default function OverviewPage({
+  mode,
+  selectedTenantId,
+}: {
+  mode: 'client' | 'internal';
+  selectedTenantId?: string;
+}) {
   const [state, setState] = useState<LoadState<PortalOverview>>({ status: 'loading' });
   const [revision, setRevision] = useState(0);
   const reload = useCallback(() => setRevision((value) => value + 1), []);
@@ -177,38 +252,43 @@ export default function OverviewPage({ selectedTenantId }: { selectedTenantId?: 
   const scopeLabel = data.scope.kind === 'ALL_TENANTS'
     ? `${data.scope.tenantCount ?? 0} tenant`
     : data.scope.name ?? data.scope.id ?? 'Tenant hiện tại';
+  const isInternal = mode === 'internal';
 
   return (
     <main className="portal-main" id="portal-main">
       <div className="portal-page">
         <header className="portal-page-header">
           <div>
-            <p className="portal-eyebrow">Security operations · {scopeLabel}</p>
-            <h1>Tổng quan an ninh</h1>
-            <p>Trạng thái hiện tại được tổng hợp từ dữ liệu vận hành đã lưu, cập nhật tự động mỗi 30 giây.</p>
+            <p className="portal-eyebrow">{isInternal ? 'QTS Internal · Command Center' : 'QTS One · Dịch vụ'} · {scopeLabel}</p>
+            <h1>{isInternal ? 'Trung tâm điều hành' : 'Tổng quan dịch vụ'}</h1>
+            <p>{isInternal
+              ? 'Theo dõi yêu cầu tư vấn, cảnh báo, SLA và sức khỏe tài sản trên toàn bộ phạm vi được cấp quyền.'
+              : 'Theo dõi trạng thái dịch vụ, hỗ trợ và tài sản số của tổ chức, cập nhật tự động mỗi 30 giây.'}</p>
           </div>
           <div className="portal-page-header__actions">
-            <span className="portal-status" data-tone="healthy"><span className="portal-status__mark" />Cập nhật {formatTime(data.generatedAt)}</span>
-            <button className="portal-icon-button" onClick={reload} title="Làm mới dashboard" type="button">
+            <Badge tone="healthy"><span className="portal-status__mark" />Cập nhật {formatTime(data.generatedAt)}</Badge>
+            <Button onClick={reload} size="icon" title="Làm mới dashboard" type="button">
               <RefreshCw aria-hidden="true" /><span className="sr-only">Làm mới dashboard</span>
-            </button>
+            </Button>
           </div>
         </header>
 
-        <section className="portal-metric-strip" aria-label="Chỉ số an ninh chính">
+        <section className="portal-metric-strip" aria-label={isInternal ? 'Chỉ số điều hành chính' : 'Chỉ số dịch vụ chính'}>
           <article className="portal-metric" data-tone={data.metrics.criticalAlerts > 0 ? 'critical' : 'healthy'}>
-            <span>Cảnh báo nghiêm trọng</span><strong>{data.metrics.criticalAlerts}</strong><small>{data.metrics.openAlerts} cảnh báo đang mở</small>
+            <div className="portal-metric__label"><span>Cảnh báo nghiêm trọng</span><ShieldAlert aria-hidden="true" /></div><strong>{data.metrics.criticalAlerts}</strong><small>{data.metrics.openAlerts} cảnh báo đang mở</small>
           </article>
           <article className="portal-metric" data-tone={data.metrics.slaBreached > 0 ? 'critical' : 'healthy'}>
-            <span>Ticket hoạt động</span><strong>{data.metrics.activeTickets}</strong><small>{data.metrics.slaBreached} ticket vi phạm SLA</small>
+            <div className="portal-metric__label"><span>Ticket hoạt động</span><TicketCheck aria-hidden="true" /></div><strong>{data.metrics.activeTickets}</strong><small>{data.metrics.slaBreached} ticket vi phạm SLA</small>
           </article>
           <article className="portal-metric" data-tone={healthyPercent === 100 ? 'healthy' : data.metrics.totalAssets > 0 ? 'warning' : undefined}>
-            <span>Sức khỏe tài sản</span><strong>{healthyPercent}%</strong><small>{data.metrics.healthyAssets} / {data.metrics.totalAssets} tài sản khỏe</small>
+            <div className="portal-metric__label"><span>Sức khỏe tài sản</span><Server aria-hidden="true" /></div><strong>{healthyPercent}%</strong><small>{data.metrics.healthyAssets} / {data.metrics.totalAssets} tài sản khỏe</small>
           </article>
           <article className="portal-metric" data-tone={data.metrics.expiringLicenses > 0 ? 'warning' : 'healthy'}>
-            <span>License sắp hết hạn</span><strong>{data.metrics.expiringLicenses}</strong><small>{data.metrics.unpaidInvoices} hóa đơn chưa thanh toán</small>
+            <div className="portal-metric__label"><span>License sắp hết hạn</span><KeyRound aria-hidden="true" /></div><strong>{data.metrics.expiringLicenses}</strong><small>{data.metrics.unpaidInvoices} hóa đơn chưa thanh toán</small>
           </article>
         </section>
+
+        {isInternal && data.contactRequests && <ContactRequests records={data.contactRequests} />}
 
         <div className="portal-chart-grid">
           <ThreatChart data={data.threatSeries} />

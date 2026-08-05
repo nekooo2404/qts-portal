@@ -34,7 +34,12 @@ export default function PortalWorkspace({
   const [selectedTenantId, setSelectedTenantId] = useState<string>();
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [tenantLoadError, setTenantLoadError] = useState<string>();
-  const canonicalPath = path === '/client' ? '/client/overview' : path === '/admin' ? '/admin/soc' : path;
+  const normalizedPath = path.length > 1 ? path.replace(/\/+$/u, '') : path;
+  const canonicalPath = normalizedPath === '/portal'
+    ? '/portal/overview'
+    : normalizedPath === '/admin'
+      ? '/admin/soc'
+      : normalizedPath;
   const allowedPaths = useMemo(() => new Set(navigationFor(session).map((item) => item.path)), [session]);
 
   useEffect(() => {
@@ -62,8 +67,8 @@ export default function PortalWorkspace({
   const common = { selectedTenantId, session, tenants };
   const pageKey = `${canonicalPath}:${selectedTenantId ?? (isInternal ? 'all-tenants' : session.authorization.tenantId)}`;
   let page;
-  if (canonicalPath === '/client/overview' || canonicalPath === '/admin/soc') {
-    page = <OverviewPage key={pageKey} selectedTenantId={selectedTenantId} />;
+  if (canonicalPath === '/portal/overview' || canonicalPath === '/admin/soc') {
+    page = <OverviewPage key={pageKey} mode={isInternal ? 'internal' : 'client'} selectedTenantId={selectedTenantId} />;
   } else if (canonicalPath.endsWith('/tickets')) {
     page = <TicketsPage {...common} canCreate={hasPortalPermission(session.authorization.role, 'tickets.create')} canManage={hasPortalPermission(session.authorization.role, 'tickets.manage')} key={pageKey} />;
   } else if (canonicalPath.endsWith('/documents')) {
